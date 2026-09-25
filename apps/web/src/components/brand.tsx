@@ -4,9 +4,15 @@ import { useEffect } from 'react';
 
 /**
  * The ViaRoute mark: a "V" drawn as a call route — caller → ViaRoute → buyer.
- * Only used on platform pages; customer portals show their own (white-label) branding.
+ * Shown on platform pages and on customer portals without white-label branding (see isWhiteLabeled).
  */
 export const BRAND_NAME = 'ViaRoute';
+
+type PortalBrand = { platform?: boolean; branding?: { portalName?: string; logoUrl?: string; primaryColor?: string } | null } | null | undefined;
+
+/** A customer portal with its own name, logo or color. Without that, portals show the ViaRoute brand. */
+export const isWhiteLabeled = (portal: PortalBrand) =>
+  !!portal && !portal.platform && !!(portal.branding?.portalName || portal.branding?.logoUrl || portal.branding?.primaryColor);
 
 /**
  * Browser tab title and icon. Platform pages: "Page · ViaRoute" with the ViaRoute icon.

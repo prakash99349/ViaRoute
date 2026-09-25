@@ -10,7 +10,7 @@ import {
 import { api, money } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { homeFor, type Role } from '@/lib/types';
-import { useDocumentBrand, ViaRouteMark } from './brand';
+import { isWhiteLabeled, useDocumentBrand, ViaRouteMark } from './brand';
 import { EmailBanner } from './email-banner';
 import { Softphone } from './softphone';
 import { NotificationBell } from './notification-bell';
@@ -147,19 +147,22 @@ export function AppShell({ children, allow }: { children: ReactNode; allow: Role
 
   // Tab title: the page's nav label, then the portal (or ViaRoute) name.
   const pageLabel = [...ADMIN_NAV, ...TENANT_NAV].flatMap((g) => g.items).find((i) => isActive(path, i.href))?.label;
-  useDocumentBrand(pageLabel, portal && !portal.platform ? portal : null);
+  // Customer portals show the ViaRoute brand unless the customer has white-label branding.
+  const branded = isWhiteLabeled(portal);
+  useDocumentBrand(pageLabel, branded ? portal : null);
 
   if (loading || !allowed) return <Spinner />;
 
   const groups = (isAdmin ? ADMIN_NAV : TENANT_NAV)
     .map((g) => ({ ...g, items: g.items.filter((i) => visible(i, user.role)) }))
     .filter((g) => g.items.length);
-  const title = isAdmin ? 'ViaRoute' : portal?.branding?.portalName ?? portal?.name ?? 'Portal';
-  const subtitle = isAdmin ? 'Platform admin' : tenant?.plan ? `${tenant.plan.name} plan` : user.role === 'PUBLISHER' ? 'Publisher' : user.role === 'BUYER' ? 'Buyer' : '';
+  const title = !branded ? 'ViaRoute' : portal?.branding?.portalName ?? portal?.name ?? 'Portal';
+  const role = user.role === 'PUBLISHER' ? 'Publisher' : user.role === 'BUYER' ? 'Buyer' : user.role === 'AGENT' ? 'Agent' : tenant?.plan ? `${tenant.plan.name} plan` : '';
+  const subtitle = isAdmin ? 'Platform admin' : !branded ? [portal?.name, role].filter(Boolean).join(' · ') : tenant?.plan ? `${tenant.plan.name} plan` : user.role === 'PUBLISHER' ? 'Publisher' : user.role === 'BUYER' ? 'Buyer' : '';
   const brandStyle = portal?.branding?.primaryColor ? ({ '--brand': portal.branding.primaryColor, '--brand-contrast': '#ffffff' } as CSSProperties) : undefined;
   const tabs = MOBILE_TABS.filter((t) => !isAdmin && visible(t, user.role));
 
-  const logo = isAdmin ? (
+  const logo = !branded ? (
     <ViaRouteMark size={32} />
   ) : portal?.branding?.logoUrl ? (
     // eslint-disable-next-line @next/next/no-img-element -- tenant-uploaded logo (data URL)

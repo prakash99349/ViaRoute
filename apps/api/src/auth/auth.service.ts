@@ -352,9 +352,11 @@ export function toPublic(u: User): PublicUser {
   };
 }
 
+/** Name and color for emails: the customer's white-label brand, or ViaRoute when they have none. */
 export function brandOf(tenant: Tenant | null) {
-  const b = (tenant?.branding ?? {}) as { portalName?: string; primaryColor?: string };
-  return { name: b.portalName ?? tenant?.name ?? 'ViaRoute', color: b.primaryColor };
+  const b = (tenant?.branding ?? {}) as { portalName?: string; primaryColor?: string; logoUrl?: string };
+  const whiteLabeled = !!(b.portalName || b.primaryColor || b.logoUrl);
+  return { name: whiteLabeled ? b.portalName ?? tenant!.name : 'ViaRoute', color: b.primaryColor };
 }
 
 /** Email links only work on the portal the account belongs to. */

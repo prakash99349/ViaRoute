@@ -3,18 +3,19 @@
 import { Phone } from 'lucide-react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useAuth } from '@/lib/auth';
-import { useDocumentBrand, ViaRouteMark } from './brand';
+import { isWhiteLabeled, useDocumentBrand, ViaRouteMark } from './brand';
 import { Alert, Card, Spinner } from './ui';
 
 /** Centered, portal-branded card used by login, reset password, invites, etc. */
 export function AuthCard({ title, subtitle, children, footer }: { title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode }) {
   const { portal, portalError, loading } = useAuth();
-  const tenantPortal = portal && !portal.platform ? portal : null;
+  const tenantPortal = isWhiteLabeled(portal) ? portal : null;
   useDocumentBrand(title, tenantPortal);
   if (loading) return <Spinner />;
   if (portalError) return <div className="p-8 text-center">{portalError}</div>;
 
-  const brandName = portal?.branding?.portalName ?? portal?.name ?? 'ViaRoute';
+  // White-label portals: their name. Others: ViaRoute, with the company name when on a customer portal.
+  const brandName = tenantPortal ? portal?.branding?.portalName ?? portal?.name ?? 'ViaRoute' : portal && !portal.platform ? `ViaRoute · ${portal.name}` : 'ViaRoute';
   const color = portal?.branding?.primaryColor;
 
   return (
