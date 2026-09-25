@@ -18,6 +18,10 @@ class SimulateDto {
   @IsOptional() @IsIn(['A', 'B', 'C'])
   attestation?: 'A' | 'B' | 'C';
 
+  /** Keys pressed at each IVR prompt, in order. */
+  @IsOptional() @IsArray() @ArrayMaxSize(30) @Matches(/^[0-9*#]{0,20}$/, { each: true })
+  digits?: string[];
+
   @IsOptional() @IsArray() @ArrayMaxSize(10) @IsIn(['answer', 'no_answer', 'busy'], { each: true })
   outcomes?: BuyerOutcome[];
 

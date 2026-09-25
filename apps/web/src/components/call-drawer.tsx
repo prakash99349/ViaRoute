@@ -31,6 +31,8 @@ export interface CallRow {
   attestation?: string | null;
   spamScore?: number | null;
   lineType?: string | null;
+  ivrPath?: string | null;
+  ivrData?: Record<string, string> | null;
   revenue?: string;
   payout?: string;
   cost?: string;
@@ -102,6 +104,8 @@ export function CallDrawer({ id, onClose, onChanged }: { id: string; onClose: ()
               ['Publisher', c.publisher?.name ?? '—'],
               ['Buyer', c.buyer?.name ?? (c.target ? 'Direct (no buyer)' : '—')],
               ...(c.target ? [['Target', c.target.name] as [string, string]] : []),
+              ...(c.ivrPath ? [['IVR choices', c.ivrPath] as [string, string]] : []),
+              ...(c.ivrData && Object.keys(c.ivrData).length ? [['IVR entries', Object.entries(c.ivrData).map(([k, v]) => `${k}: ${v}`).join(', ')] as [string, string]] : []),
               ...(c.attestation ? [['Caller ID check', `STIR/SHAKEN grade ${c.attestation}`] as [string, string]] : []),
               ...(c.spamScore !== null && c.spamScore !== undefined ? [['Spam score', `${c.spamScore} / 100${c.lineType ? ` · ${c.lineType.replace(/_/g, ' ')}` : ''}`] as [string, string]] : []),
               ['Buyers tried', c.attempts],

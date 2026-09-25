@@ -28,6 +28,20 @@ export interface CallControl {
   hangup(callControlId: string): Promise<void>;
   /** Refuses an unanswered inbound call. */
   reject(callControlId: string): Promise<void>;
+  /** Plays a prompt and collects keypad digits; the carrier later sends a gathered event (digits may be empty). */
+  gather(callControlId: string, req: GatherRequest): Promise<void>;
+}
+
+export interface GatherRequest {
+  prompt: string;
+  minDigits: number;
+  maxDigits: number;
+  timeoutSec: number;
+}
+
+export interface GatherEvent extends LegEvent {
+  /** What the caller pressed ("" when they pressed nothing). */
+  digits: string;
 }
 
 // --- Normalised events ----------------------------------------------------------

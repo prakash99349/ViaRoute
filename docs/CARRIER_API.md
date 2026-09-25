@@ -39,6 +39,7 @@ All requests are `POST` with a JSON body (possibly `{}`), header `Authorization:
 | `POST /calls/{callId}/record` | — | Record the (bridged) call. Send `call.recording_saved` when the file is ready. |
 | `POST /calls/{callId}/hangup` | — | Hang up that leg. It's fine if it's already gone. |
 | `POST /calls/{callId}/reject` | — | Refuse an unanswered incoming call. |
+| `POST /calls/{callId}/gather` | `{ "text": "Press 1 for sales…", "minDigits": 1, "maxDigits": 1, "timeoutSec": 6, "terminator": "#" }` | IVR: play the text and collect keypad digits (stop early on `#` or `maxDigits`). Send `call.gathered` with what was pressed — also when nothing was (`"digits": ""`). |
 
 Also required:
 
@@ -58,7 +59,8 @@ Also required:
 |---|---|---|
 | `call.inbound` | `callId`, `from`, `to`, `at`, optional `attestation` | A call arrives on one of the numbers (`to`). Don't answer it yourself — wait for the `answer` command. Send the STIR/SHAKEN grade of the caller ID as `attestation`: `"A"`, `"B"` or `"C"` (leave it out if the call wasn't signed) — campaigns can require a minimum grade. Hidden caller IDs: send `"from": "anonymous"`. |
 | `call.answered` | `callId`, `at` | An outgoing leg you started with `POST /calls` was answered. |
-| `call.speak_ended` | `callId`, `at` | A `speak` command finished playing. |
+| `call.speak_ended` | `callId`, `at` | A `speak` command finished playing — on any leg (ViaRoute also speaks a short *whisper* to the buyer's leg before bridging). |
+| `call.gathered` | `callId`, `digits`, `at` | A `gather` finished: the keys pressed (`""` if none, a trailing `#` is fine). |
 | `call.hangup` | `callId`, `at`, `cause` | **Any** leg ended — caller or buyer, answered or not (`cause`: e.g. `normal_clearing`, `no_answer`, `busy`, `timeout`). |
 | `call.recording_saved` | `callId` (the caller's leg), `recordingUrl` | The recording is ready. The URL must be downloadable (no login) for at least 10 minutes; ViaRoute copies it. `.mp3` or `.wav`. |
 

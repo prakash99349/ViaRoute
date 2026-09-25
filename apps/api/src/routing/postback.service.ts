@@ -11,12 +11,12 @@ interface PostbackJob {
 /** Values a publisher can put in their postback URL, e.g. https://track.net/cb?id={call_id}&amount={payout} */
 export const POSTBACK_MACROS = [
   'call_id', 'caller', 'duration', 'connected', 'payout', 'revenue', 'converted',
-  'campaign', 'campaign_id', 'publisher', 'publisher_id', 'tracking_number',
+  'campaign', 'campaign_id', 'publisher', 'publisher_id', 'tracking_number', 'ivr_path', // plus ivr_<field> for each IVR field
 ] as const;
 
-export function fillMacros(template: string, values: Partial<Record<(typeof POSTBACK_MACROS)[number], string | number>>) {
-  return template.replace(/\{([a-z_]+)\}/g, (all, name: string) =>
-    name in values ? encodeURIComponent(String(values[name as keyof typeof values])) : all,
+export function fillMacros(template: string, values: Record<string, string | number>) {
+  return template.replace(/\{([a-z0-9_]+)\}/g, (all, name: string) =>
+    name in values ? encodeURIComponent(String(values[name])) : all,
   );
 }
 

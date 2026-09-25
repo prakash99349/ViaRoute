@@ -79,6 +79,8 @@ export class TwimlDialect implements MarkupDialect {
           return `<Dial><Conference beep="false" startConferenceOnEnter="true" endConferenceOnExit="false" waitUrl="">${xml(v.room)}</Conference></Dial><Hangup/>`;
         case 'hangup': return '<Hangup/>';
         case 'reject': return '<Reject/>';
+        case 'gather':
+          return `<Gather input="dtmf" numDigits="${v.maxDigits}" timeout="${v.timeoutSec}" finishOnKey="#" actionOnEmptyResult="true" action="${xml(this.urls.gathered(v.callId))}" method="POST"><Say voice="woman" language="en-US">${xml(v.prompt)}</Say></Gather>`;
       }
     });
     return { body: `<?xml version="1.0" encoding="UTF-8"?><Response>${out.join('')}</Response>`, contentType: 'text/xml' };
@@ -92,6 +94,7 @@ export class TwimlDialect implements MarkupDialect {
       case 'status': return { callId: b.CallSid, ended: TERMINAL.has(b.CallStatus), cause: b.CallStatus };
       case 'recording': return { callId: q.call ?? b.CallSid, recordingUrl: b.RecordingStatus === 'completed' && b.RecordingUrl ? `${b.RecordingUrl}.mp3` : undefined };
       case 'markup': return { markupKey: q.k };
+      case 'gathered': return { callId: q.call, digits: b.Digits ?? '' };
     }
   }
 
@@ -192,6 +195,11 @@ export class PlivoDialect implements MarkupDialect {
         case 'join': return `<Conference enterSound="" exitSound="" waitSound="" startConferenceOnEnter="true" endConferenceOnExit="false">${xml(v.room)}</Conference>`;
         case 'hangup': return '<Hangup/>';
         case 'reject': return '<Hangup reason="rejected"/>';
+        case 'gather': {
+          const url = xml(this.urls.gathered(v.callId));
+          // No keys before the timeout: GetDigits falls through to the Redirect (no Digits = nothing pressed).
+          return `<GetDigits action="${url}" method="POST" numDigits="${v.maxDigits}" timeout="${v.timeoutSec}" finishOnKey="#" redirect="true" retries="1"><Speak voice="WOMAN" language="en-US">${xml(v.prompt)}</Speak></GetDigits><Redirect method="POST">${url}</Redirect>`;
+        }
       }
     });
     return { body: `<?xml version="1.0" encoding="UTF-8"?><Response>${out.join('')}</Response>`, contentType: 'text/xml' };
@@ -211,6 +219,7 @@ export class PlivoDialect implements MarkupDialect {
       case 'status': return { callId: this.legId(b), ended: true, cause: b.HangupCause ?? b.CallStatus };
       case 'recording': return { callId: q.call, recordingUrl: b.RecordUrl };
       case 'markup': return { markupKey: q.k };
+      case 'gathered': return { callId: q.call, digits: b.Digits ?? '' };
     }
   }
 
@@ -308,6 +317,8 @@ export class BandwidthDialect implements MarkupDialect {
         case 'hangup':
         case 'reject':
           return '<Hangup/>';
+        case 'gather':
+          return `<Gather gatherUrl="${xml(this.urls.gathered(v.callId))}" gatherMethod="POST" maxDigits="${v.maxDigits}" terminatingDigits="#" firstDigitTimeout="${v.timeoutSec}"><SpeakSentence voice="julie">${xml(v.prompt)}</SpeakSentence></Gather>`;
       }
     });
     return { body: `<?xml version="1.0" encoding="UTF-8"?><Response>${out.join('')}</Response>`, contentType: 'application/xml' };
@@ -321,6 +332,7 @@ export class BandwidthDialect implements MarkupDialect {
       case 'status': return { callId: b.callId, ended: b.eventType === 'disconnect', cause: b.cause };
       case 'recording': return { callId: q.call, recordingUrl: b.mediaUrl };
       case 'markup': return { markupKey: q.k };
+      case 'gathered': return { callId: q.call, digits: b.digits ?? '' };
     }
   }
 
@@ -410,6 +422,10 @@ export class VonageDialect implements MarkupDialect {
             ...(v.record ? { record: true, eventUrl: [this.urls.recording(v.record.callId)], eventMethod: 'POST' } : {}),
           });
           break;
+        case 'gather':
+          out.push({ action: 'talk', text: v.prompt, language: 'en-US', bargeIn: true });
+          out.push({ action: 'input', type: ['dtmf'], dtmf: { maxDigits: v.maxDigits, timeOut: v.timeoutSec, submitOnHash: true }, eventUrl: [this.urls.gathered(v.callId)], eventMethod: 'POST' });
+          return out; // the input's answer decides what happens next
         case 'hangup':
         case 'reject':
           // An NCCO that ends ends the call.
@@ -431,6 +447,15 @@ export class VonageDialect implements MarkupDialect {
       case 'status': return { callId: b.uuid, ended: TERMINAL.has(b.status), cause: b.status };
       case 'recording': return { callId: q.call, recordingUrl: b.recording_url };
       case 'markup': return { markupKey: q.k };
+      case 'gathered': {
+        let digits = '';
+        try {
+          digits = (JSON.parse(b.dtmf || '{}') as { digits?: string }).digits ?? '';
+        } catch {
+          digits = '';
+        }
+        return { callId: q.call, digits };
+      }
     }
   }
 

@@ -19,6 +19,8 @@ export interface SimScenario {
   stepMs?: number;
   /** STIR/SHAKEN grade the simulated carrier reports (A | B | C). */
   attestation?: string;
+  /** Keys the caller presses at each IVR prompt, in order ("" = presses nothing). */
+  digits?: string[];
 }
 
 const SPEAK_SEC = 4;
@@ -59,7 +61,7 @@ export class SimulatorCallControl implements CallControl {
 
   /** Places a simulated inbound call. Resolves with the call id once routing has started. */
   async start(s: SimScenario): Promise<string | null> {
-    const scenario = { outcomes: s.outcomes ?? [], talkSec: s.talkSec ?? 95, hangupBy: s.hangupBy ?? 'caller', stepMs: s.stepMs ?? 400 };
+    const scenario = { outcomes: s.outcomes ?? [], talkSec: s.talkSec ?? 95, hangupBy: s.hangupBy ?? 'caller', stepMs: s.stepMs ?? 400, digits: [...(s.digits ?? [])] };
     const estimate =
       SPEAK_SEC +
       scenario.outcomes.reduce((sum, o) => sum + (o === 'busy' ? BUSY_SEC : o === 'no_answer' ? 20 : RING_SEC), 0) +
@@ -118,6 +120,12 @@ export class SimulatorCallControl implements CallControl {
   }
 
   async bridge() {}
+
+  async gather(id: string) {
+    const s = this.session(id);
+    const digits = s.scenario.digits.shift() ?? '';
+    this.after(id, SPEAK_SEC + 2, (at) => this.engine.onGathered({ callControlId: id, digits, at }));
+  }
 
   async recordStart(id: string) {
     this.session(id).recording = true;

@@ -8,8 +8,9 @@ import { DEFAULT_PER_MINUTE } from '../config';
 import { StorageService } from '../common/storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { stateForNumber } from './area-codes';
+import { fillWhisper, IVR_MAX_STEPS, type IvrAction, type IvrFlow } from './ivr';
 import { SpamService } from './spam.service';
-import { CALL_CONTROLS, type CallControl, type SharedCallControls, type HangupEvent, type InboundEvent, type LegEvent, type ProviderName, type RecordingEvent } from './call-control.types';
+import { CALL_CONTROLS, type CallControl, type GatherEvent, type SharedCallControls, type HangupEvent, type InboundEvent, type LegEvent, type ProviderName, type RecordingEvent } from './call-control.types';
 import { CapsService, type CapLimits } from './caps.service';
 import { fillMacros, PostbackService } from './postback.service';
 import { geoAllows, isOpen, orderByPriorityAndWeight, type GeoRules, type Schedule } from './rules';
@@ -86,8 +87,18 @@ interface CallState {
   bridged: boolean;
   answeredAt?: string;
   connectedEndedAt?: string;
-  /** greeting = playing the recording notice; closing = playing the "no one available" message. */
-  phase: 'greeting' | 'dialing' | 'connected' | 'closing' | 'ended';
+  /** For the buyer whisper. */
+  campaignName?: string;
+  callerNumber?: string;
+  callerState?: string | null;
+  whisperText?: string | null;
+  /** IVR in progress (or finished: path/data stay for the whisper and reports). */
+  ivr?: { flow: IvrFlow; node: string; retries: number; steps: number; path: string[]; data: Record<string, string>; choice?: string };
+  /**
+   * greeting = recording notice; ivr = phone menu; dialing = ringing buyers; whisper = message to the
+   * buyer before connecting; closing = "no one available" / goodbye message.
+   */
+  phase: 'greeting' | 'ivr' | 'dialing' | 'whisper' | 'connected' | 'closing' | 'ended';
 }
 
 /**
@@ -257,6 +268,11 @@ export class CallEngine {
       usingFallback: false,
       bridged: false,
       phase: 'greeting',
+      campaignName: campaign!.name,
+      callerNumber: ev.from,
+      callerState,
+      whisperText: campaign!.whisperText,
+      ...(ivrFlow(campaign!.ivr) ? { ivr: { flow: ivrFlow(campaign!.ivr)!, node: ivrFlow(campaign!.ivr)!.start, retries: 0, steps: 0, path: [], data: {} } } : {}),
     };
 
     await this.withLock(call.id, async () => {
@@ -265,7 +281,7 @@ export class CallEngine {
         await cc.speak(ev.callControlId, RECORDING_NOTICE); // dial when it finishes
         await this.save(state);
       } else {
-        await this.dialNext(state);
+        await this.afterGreeting(state);
       }
     });
     return call.id;
@@ -273,23 +289,132 @@ export class CallEngine {
 
   async onSpeakEnded(ev: LegEvent) {
     await this.withState(ev.callControlId, async (s) => {
-      if (s.phase === 'greeting') await this.dialNext(s);
+      if (s.phase === 'greeting') await this.afterGreeting(s);
+      else if (s.phase === 'ivr' && ev.callControlId === s.inboundId) {
+        const node = s.ivr?.flow.nodes.find((n) => n.id === s.ivr!.node);
+        if (node?.type === 'say') await this.ivrAction(s, node.next);
+      } else if (s.phase === 'whisper' && ev.callControlId === s.outboundId) await this.connect(s, ev.at);
       else if (s.phase === 'closing') await (await this.cc(s)).hangup(s.inboundId);
     });
   }
 
+  /** Keypad digits from an IVR prompt. */
+  async onGathered(ev: GatherEvent) {
+    await this.withState(ev.callControlId, async (s) => {
+      if (s.phase !== 'ivr' || ev.callControlId !== s.inboundId || !s.ivr) return;
+      const node = s.ivr.flow.nodes.find((n) => n.id === s.ivr!.node);
+      if (!node || node.type === 'say') return;
+      const digits = (ev.digits ?? '').replace(/[^0-9*#]/g, '').replace(/#$/, '');
+      if (node.type === 'menu') {
+        const opt = node.options.find((o) => o.digit === digits[0]);
+        if (opt) {
+          s.ivr.path.push(`${node.name}: ${opt.label}`);
+          s.ivr.retries = 0;
+          return this.ivrAction(s, opt.action, opt.label);
+        }
+      } else if (digits.length >= node.minDigits && digits.length <= node.maxDigits) {
+        s.ivr.data[node.variable] = digits;
+        s.ivr.path.push(`${node.name}: entered`);
+        s.ivr.retries = 0;
+        return this.ivrAction(s, node.next);
+      }
+      // Nothing, or a wrong key: ask again, then give up with the fallback.
+      if (s.ivr.retries < (node.retries ?? 2)) {
+        s.ivr.retries++;
+        return this.runIvrNode(s, node.id);
+      }
+      s.ivr.retries = 0;
+      s.ivr.path.push(`${node.name}: no answer`);
+      return this.ivrAction(s, node.fallback);
+    });
+  }
+
+  /** Is this carrier leg the caller or a buyer? (Markup carriers need it to answer webhooks.) */
+  async legRole(callControlId: string): Promise<'caller' | 'buyer' | null> {
+    const callId = await this.redis.get(legKey(callControlId));
+    const raw = callId ? await this.redis.get(stateKey(callId)) : null;
+    if (!raw) return null;
+    return (JSON.parse(raw) as CallState).inboundId === callControlId ? 'caller' : 'buyer';
+  }
+
   async onAnswered(ev: LegEvent) {
     await this.withState(ev.callControlId, async (s) => {
-      if (ev.callControlId !== s.outboundId || s.bridged || s.phase === 'ended') return;
-      const cc = await this.cc(s);
-      await cc.bridge(s.inboundId, s.outboundId);
-      s.bridged = true;
-      s.answeredAt = ev.at.toISOString();
-      s.phase = 'connected';
-      await this.save(s);
-      if (s.recordCalls) await cc.recordStart(s.inboundId).catch((e) => this.log.warn(`record_start: ${e.message}`));
-      await prisma.call.update({ where: { id: s.callId }, data: { status: CallStatus.IN_PROGRESS, answeredAt: ev.at } });
+      if (ev.callControlId !== s.outboundId || s.bridged || s.phase === 'ended' || s.phase === 'whisper') return;
+      // Buyer whisper first ("Auto insurance call from Florida"), then connect.
+      if (s.whisperText && !s.usingFallback) {
+        s.phase = 'whisper';
+        await this.save(s);
+        const text = fillWhisper(s.whisperText, { campaign: s.campaignName, caller: s.callerNumber ?? '', state: s.callerState, choice: s.ivr?.choice, data: s.ivr?.data });
+        await (await this.cc(s)).speak(s.outboundId, text);
+        return;
+      }
+      await this.connect(s, ev.at);
     });
+  }
+
+  /** Bridges the caller to the buyer who answered. */
+  private async connect(s: CallState, at: Date) {
+    if (!s.outboundId || s.bridged) return;
+    const cc = await this.cc(s);
+    await cc.bridge(s.inboundId, s.outboundId);
+    s.bridged = true;
+    s.answeredAt = at.toISOString();
+    s.phase = 'connected';
+    await this.save(s);
+    if (s.recordCalls) await cc.recordStart(s.inboundId).catch((e) => this.log.warn(`record_start: ${e.message}`));
+    await prisma.call.update({ where: { id: s.callId }, data: { status: CallStatus.IN_PROGRESS, answeredAt: at } });
+  }
+
+  // ---------------------------------------------------------------------------
+  // IVR
+  // ---------------------------------------------------------------------------
+
+  /** After the recording notice: the phone menu if the campaign has one, else straight to buyers. */
+  private async afterGreeting(s: CallState) {
+    if (s.ivr) await this.runIvrNode(s, s.ivr.node);
+    else await this.dialNext(s);
+  }
+
+  private async runIvrNode(s: CallState, nodeId: string): Promise<void> {
+    const ivr = s.ivr!;
+    const node = ivr.flow.nodes.find((n) => n.id === nodeId);
+    if (!node || ++ivr.steps > IVR_MAX_STEPS) return this.ivrAction(s, { type: 'hangup' });
+    ivr.node = node.id;
+    s.phase = 'ivr';
+    await this.save(s);
+    const cc = await this.cc(s);
+    if (node.type === 'say') return cc.speak(s.inboundId, node.text);
+    const prompt = ivr.retries > 0 && node.invalidPrompt ? `${node.invalidPrompt} ${node.prompt}` : node.prompt;
+    await cc.gather(s.inboundId, {
+      prompt,
+      minDigits: node.type === 'menu' ? 1 : node.minDigits,
+      maxDigits: node.type === 'menu' ? 1 : node.maxDigits,
+      timeoutSec: node.timeoutSec ?? (node.type === 'menu' ? 6 : 10),
+    });
+  }
+
+  private async ivrAction(s: CallState, action: IvrAction, choice?: string): Promise<void> {
+    const ivr = s.ivr!;
+    if (choice) ivr.choice = choice;
+    await prisma.call.update({ where: { id: s.callId }, data: { ivrPath: ivr.path.join(' > ').slice(0, 1000) || null, ivrData: ivr.data } });
+    if (action.type === 'goto') {
+      ivr.retries = 0;
+      return this.runIvrNode(s, action.node);
+    }
+    if (action.type === 'route') {
+      const buyers = action.buyerIds ?? [];
+      const targets = action.targetIds ?? [];
+      if (buyers.length || targets.length) {
+        s.candidates = s.candidates.filter((c) => (c.targetId && targets.includes(c.targetId)) || (c.buyerId && buyers.includes(c.buyerId)));
+      }
+      return this.dialNext(s);
+    }
+    // Hang up, with a goodbye message if there is one.
+    s.phase = 'closing';
+    await this.save(s);
+    const cc = await this.cc(s);
+    if (action.message) await cc.speak(s.inboundId, action.message);
+    else await cc.hangup(s.inboundId);
   }
 
   async onHangup(ev: HangupEvent) {
@@ -496,6 +621,8 @@ export class CallEngine {
         publisher: call.publisher.name,
         publisher_id: call.publisher.id,
         tracking_number: call.dialedNumber ?? '',
+        ivr_path: call.ivrPath ?? '',
+        ...Object.fromEntries(Object.entries((call.ivrData ?? {}) as Record<string, string>).map(([k, v]) => [`ivr_${k}`, v])),
       });
       await this.postbacks.send(call.tenantId, call.id, url);
     }
@@ -561,5 +688,10 @@ export class CallEngine {
 const legKey = (callControlId: string) => `leg:${callControlId}`;
 const accountScope = (tenantId: string) => `acct:${tenantId}`;
 /** Scopes to release; older call states only had the route. */
+/** A campaign's IVR, when it's switched on. */
+const ivrFlow = (v: unknown): IvrFlow | null => {
+  const f = v as IvrFlow | null;
+  return f && f.enabled && Array.isArray(f.nodes) && f.nodes.length ? f : null;
+};
 const scopesOf = (s: CallState) => s.reservedScopes ?? (s.currentRouteId ? [s.currentRouteId] : []);
 const stateKey = (callId: string) => `callstate:${callId}`;

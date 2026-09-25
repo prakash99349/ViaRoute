@@ -16,7 +16,9 @@ export type Verb =
   /** Wait in / join the call's conference room; `record` starts a recording (carriers without a REST recorder). */
   | { t: 'join'; room: string; record?: { callId: string } }
   | { t: 'hangup' }
-  | { t: 'reject' };
+  | { t: 'reject' }
+  /** Speak a prompt and collect keypad digits (→ CallEngine.onGathered). */
+  | { t: 'gather'; callId: string; prompt: string; minDigits: number; maxDigits: number; timeoutSec: number };
 
 /** Our webhook addresses for one carrier account. */
 export interface MarkupUrls {
@@ -26,6 +28,7 @@ export interface MarkupUrls {
   join(room: string): string;
   recording(callId: string): string;
   markup(key: string): string;
+  gathered(callId: string): string;
 }
 
 /** Small shared store (Redis) for data a webhook needs later, across API servers. */
@@ -47,9 +50,11 @@ export interface MarkupEvent {
   recordingUrl?: string;
   /** Stored markup to serve (Plivo transfers, Bandwidth redirects). */
   markupKey?: string;
+  /** Keys pressed at a gather. */
+  digits?: string;
 }
 
-export type Hook = 'answer' | 'status' | 'flow' | 'join' | 'recording' | 'markup';
+export type Hook = 'answer' | 'status' | 'flow' | 'join' | 'recording' | 'markup' | 'gathered';
 
 export interface MarkupDialect {
   readonly kind: MarkupKind;

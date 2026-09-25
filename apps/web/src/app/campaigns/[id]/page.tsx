@@ -7,6 +7,7 @@ import { Success } from '@/components/auth-card';
 import { AppShell } from '@/components/app-shell';
 import { ArrowLeft, Briefcase, Clock, Crosshair, ShieldAlert, FlaskConical, Gauge, Hash, MapPin, Pencil, PhoneOutgoing, Plus, Route as RouteIcon, SlidersHorizontal, Target, Trash2, Unlink } from 'lucide-react';
 import { Alert, Badge, Button, Card, CardHeader, Empty, Field, IconButton, Initials, Modal, Select, Spinner, Toggle, table } from '@/components/ui';
+import { IvrBuilder, type IvrFlow } from '@/components/ivr-builder';
 import { CapsFields, capsFrom } from '@/components/routing-fields';
 import { api, duration, formatPhone, money } from '@/lib/api';
 import { useAction, useApi } from '@/lib/use-api';
@@ -86,6 +87,8 @@ interface Campaign {
   maxSpamScore: number | null;
   autoBlockShortCalls: number | null;
   shortCallSec: number;
+  ivr: IvrFlow | null;
+  whisperText: string | null;
   routes: Route[];
   phoneNumbers: NumberRow[];
 }
@@ -691,6 +694,7 @@ function TestCallCard({ c }: { c: Campaign }) {
           outcomes: SCENARIOS[String(f.get('scenario'))].outcomes,
           talkSec: Number(f.get('talkSec')),
           stepMs: 500,
+          digits: String(f.get('digits') ?? '').split(/[,\s]+/).filter(Boolean),
         },
       }),
     );
@@ -703,7 +707,7 @@ function TestCallCard({ c }: { c: Campaign }) {
     <Card>
       <h2 className="flex items-center gap-2 text-[15px] font-semibold"><FlaskConical size={17} strokeWidth={1.75} className="text-faint" aria-hidden />Test call</h2>
       <p className="text-xs text-muted">Simulates a caller dialing your number and runs it through your real routing rules. Nobody&apos;s phone rings.</p>
-      <form onSubmit={start} className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
+      <form onSubmit={start} className={`mt-4 grid gap-3 sm:grid-cols-2 lg:items-end ${c.ivr?.enabled ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
         <Select label="Tracking number" name="to">
           {c.phoneNumbers.map((n) => (
             <option key={n.id} value={n.e164}>{formatPhone(n.e164)}</option>
@@ -716,6 +720,7 @@ function TestCallCard({ c }: { c: Campaign }) {
           ))}
         </Select>
         <Field label="Talk time (sec)" name="talkSec" type="number" min={0} max={3600} defaultValue={120} />
+        {c.ivr?.enabled && <Field label="Keys to press" name="digits" placeholder="e.g. 1, 33101" hint="One entry per menu, in order." pattern="[0-9*#, ]*" />}
         <Button type="submit" icon={PhoneOutgoing} disabled={act.busy || (!!callId && !done)}>Place test call</Button>
       </form>
       {act.error && <div className="mt-3"><Alert>{act.error}</Alert></div>}
@@ -773,6 +778,7 @@ function CampaignContent() {
       {act.error && <Alert>{act.error}</Alert>}
       <TestCallCard c={c} />
       <RoutesCard c={c} onChanged={reload} />
+      <IvrBuilder campaignId={c.id} initial={c.ivr} whisper={c.whisperText} routes={c.routes} onSaved={reload} />
       <NumbersCard c={c} onChanged={reload} />
       <SpamCard c={c} onSaved={reload} />
       <SettingsCard key={JSON.stringify([c.name, c.active, c.recordCalls])} c={c} onSaved={reload} />

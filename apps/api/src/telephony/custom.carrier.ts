@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { NumberType } from '@viaroute/db';
-import type { CallControl, DialRequest } from '../routing/call-control.types';
+import type { CallControl, DialRequest, GatherRequest } from '../routing/call-control.types';
 import { ProviderError, type AvailableNumber, type NumberSearch, type PurchaseResult, type TelephonyProvider } from './telephony.types';
 
 /**
@@ -81,6 +81,11 @@ export class CustomCallControl extends CustomClient implements CallControl {
 
   reject(id: string) {
     return this.action(id, 'reject');
+  }
+
+  /** Speak the prompt and collect keypad digits; the carrier sends call.gathered. */
+  gather(id: string, g: GatherRequest) {
+    return this.action(id, 'gather', { text: g.prompt, minDigits: g.minDigits, maxDigits: g.maxDigits, timeoutSec: g.timeoutSec, terminator: '#' });
   }
 
   private async action(id: string, name: string, body: Record<string, unknown> = {}) {

@@ -156,6 +156,7 @@ export class ProvidersService {
       join: (room) => `${base}/join?room=${q(room)}`,
       recording: (callId) => `${base}/recording?call=${q(callId)}`,
       markup: (key) => `${base}/markup?k=${q(key)}`,
+      gathered: (callId) => `${base}/gathered?call=${q(callId)}`,
     };
   }
 

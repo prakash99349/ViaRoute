@@ -8,7 +8,7 @@ import { room, type Hook, type Verb } from '../telephony/markup/markup.types';
 import { ProvidersService } from '../telephony/providers.service';
 import { CallEngine } from './call-engine.service';
 
-const HOOKS = new Set<Hook>(['answer', 'status', 'flow', 'join', 'recording', 'markup']);
+const HOOKS = new Set<Hook>(['answer', 'status', 'flow', 'join', 'recording', 'markup', 'gathered']);
 
 /**
  * Webhooks for markup carriers (Twilio, SignalWire, Plivo, Bandwidth, Vonage):
@@ -60,18 +60,26 @@ export class VoiceWebhookController {
           const ctx = await captureMarkup(id, () => this.engine.onInbound(dialect.kind, { callControlId: id, from: ev.from!, to: ev.to!, at, attestation: ev.attestation }, carrier.id));
           return send(ctx.verbs.length ? ctx.verbs : [{ t: 'join', room: room(id) }]); // wait in the room while buyers ring
         }
-        case 'flow': {
+        case 'flow':
+        case 'gathered': {
           if (!ev.callId) return send([{ t: 'hangup' }]);
           const id = ev.callId;
-          const ctx = await captureMarkup(id, () => this.engine.onSpeakEnded({ callControlId: id, at }));
-          return send(ctx.verbs.length ? ctx.verbs : [{ t: 'join', room: room(id) }]);
+          const role = await this.engine.legRole(id);
+          const ctx = await captureMarkup(id, () =>
+            hook === 'gathered' ? this.engine.onGathered({ callControlId: id, digits: ev.digits ?? '', at }) : this.engine.onSpeakEnded({ callControlId: id, at }),
+          );
+          // A buyer's whisper ended → join the caller; the caller → keep waiting in their room.
+          if (ctx.joinRoom) return send([...ctx.verbs, { t: 'join', room: ctx.joinRoom }]);
+          return send(ctx.verbs.length ? ctx.verbs : role === 'buyer' ? [{ t: 'hangup' }] : [{ t: 'join', room: room(id) }]);
         }
         case 'join': {
           if (!ev.callId) return send([{ t: 'hangup' }]);
           const id = ev.callId;
           const ctx = await captureMarkup(id, () => this.engine.onAnswered({ callControlId: id, at }));
-          // Only join if the caller is still waiting for this buyer.
-          return send(ctx.joinRoom ? [{ t: 'join', room: ctx.joinRoom }] : [{ t: 'hangup' }]);
+          if (ctx.joinRoom) return send([{ t: 'join', room: ctx.joinRoom }]);
+          // Whisper to the buyer first; its end (flow hook) joins them to the caller.
+          if (ctx.verbs.length) return send(ctx.verbs);
+          return send([{ t: 'hangup' }]); // the caller is no longer waiting for this buyer
         }
         case 'status':
           if (ev.callId && ev.ended) await this.engine.onHangup({ callControlId: ev.callId, cause: ev.cause ?? 'unknown', at });

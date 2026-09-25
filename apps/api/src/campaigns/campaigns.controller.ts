@@ -8,6 +8,7 @@ import { CurrentTenant, CurrentUser, Roles } from '../common/decorators';
 import type { AuthUser } from '../common/types';
 import { assertValid, E164, orNotFound, Trim, TrimOrNull } from '../common/validation';
 import { validateGeoRules, validateSchedule, type GeoRules, type Schedule } from '../routing/rules';
+import { validateIvr, type IvrFlow } from '../routing/ivr';
 import { normalizePrefix } from '../routing/spam.service';
 
 class CampaignDto {
@@ -62,6 +63,14 @@ class CampaignDto {
 
   @IsOptional() @IsInt() @Min(1) @Max(120)
   shortCallSec?: number;
+
+  /** Phone menu (see routing/ivr.ts); null removes it. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsObject()
+  ivr?: IvrFlow | null;
+
+  /** Played to the buyer before connecting; null = none. */
+  @IsOptional() @TrimOrNull() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(500)
+  whisperText?: string | null;
 }
 
 class UpdateCampaignDto extends PartialType(CampaignDto) {}
@@ -157,7 +166,9 @@ export class CampaignsController {
   @Post('campaigns')
   async create(@CurrentTenant() tenant: Tenant, @CurrentUser() me: AuthUser, @Body() dto: CampaignDto) {
     const db = tenantDb(tenant.id);
-    const c = await db.campaign.create({ data: { ...dto, tenantId: tenant.id } });
+    // The IVR is set up after creating (it can point at the campaign's buyers).
+    const { ivr: _ivr, ...data } = dto;
+    const c = await db.campaign.create({ data: { ...data, tenantId: tenant.id } });
     await db.auditLog.create({ data: { tenantId: tenant.id, userId: me.sub, action: 'campaign.create', entity: 'Campaign', entityId: c.id } });
     return c;
   }
@@ -185,7 +196,12 @@ export class CampaignsController {
   async update(@CurrentTenant() tenant: Tenant, @CurrentUser() me: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCampaignDto) {
     const db = tenantDb(tenant.id);
     orNotFound(await db.campaign.findUnique({ where: { id } }), 'Campaign');
-    const c = await db.campaign.update({ where: { id }, data: { ...dto, ...(dto.blockedPrefixes ? { blockedPrefixes: dto.blockedPrefixes.map(normalizePrefix) } : {}) } });
+    if (dto.ivr) {
+      const [buyers, targets] = await Promise.all([db.buyer.findMany({ select: { id: true } }), db.target.findMany({ select: { id: true } })]);
+      assertValid(validateIvr(dto.ivr, { buyers: new Set(buyers.map((b) => b.id)), targets: new Set(targets.map((t) => t.id)) }));
+    }
+    const { ivr, ...rest } = dto;
+    const c = await db.campaign.update({ where: { id }, data: { ...rest, ...(ivr !== undefined ? { ivr: ivr === null ? Prisma.DbNull : (ivr as unknown as Prisma.InputJsonObject) } : {}), ...(rest.blockedPrefixes ? { blockedPrefixes: rest.blockedPrefixes.map(normalizePrefix) } : {}) } });
     await db.auditLog.create({ data: { tenantId: tenant.id, userId: me.sub, action: 'campaign.update', entity: 'Campaign', entityId: id, meta: dto as object } });
     return c;
   }

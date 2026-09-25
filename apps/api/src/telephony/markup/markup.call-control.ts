@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'async_hooks';
-import type { CallControl, DialRequest } from '../../routing/call-control.types';
+import type { CallControl, DialRequest, GatherRequest } from '../../routing/call-control.types';
 import type { AvailableNumber, NumberSearch, PurchaseResult, TelephonyProvider } from '../telephony.types';
 import { ProviderError } from '../telephony.types';
 import { room, type MarkupDialect, type MarkupKind, type MarkupUrls, type Verb } from './markup.types';
@@ -72,6 +72,13 @@ export class MarkupCallControl implements CallControl {
     const ctx = current(id);
     if (ctx) ctx.verbs.push({ t: 'reject' });
     else await this.dialect.hangupCall(id);
+  }
+
+  async gather(id: string, g: GatherRequest) {
+    const verb: Verb = { t: 'gather', callId: id, ...g };
+    const ctx = current(id);
+    if (ctx) ctx.verbs.push(verb);
+    else await this.dialect.updateCall(id, [verb]);
   }
 }
 

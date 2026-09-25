@@ -200,14 +200,18 @@ These came out of going through the code, not just the feature list.
 
 > Per-campaign rules (hidden caller IDs, blocked prefixes, calls per caller, STIR/SHAKEN minimum grade, spam-score threshold, auto-block of short-call spammers), platform-wide blocklist with prefixes, IPQualityScore spam-score lookups (cached 7 days, fail-open), spam score / attestation / line type on every call, customer **Spam & blocking** page and admin **Spam protection** page.
 
+## ☎️ IVR & buyer whisper ✅ Done
+
+> Phone-menu builder per campaign (menus, collect digits, messages; route to all or chosen buyers/targets, go to step, hang up; retries and fallbacks), keypad input on Telnyx, Custom API, Twilio, SignalWire, Plivo, Bandwidth, Vonage and the simulator, buyer whisper with placeholders, IVR choices/entries on calls, CDR and postbacks (`{ivr_path}`, `{ivr_<field>}`).
+
 ## 🅵 Phase F — Growth features (v2)
 
 | Feature | Value |
 |---|---|
 | **Ping/post & RTB** | Buyers bid per call in real time; highest bid wins |
-| **IVR builder** | "Press 1 for…" menus, qualify callers before routing |
+| **IVR builder** ✅ | "Press 1 for…" menus, qualify callers before routing |
 | **Number pools / DNI** | JavaScript snippet swaps numbers on websites per visitor, tracks the ad/keyword |
-| **Call whisper** | Short message to the buyer before connecting ("Auto insurance call from Florida") |
+| **Call whisper** ✅ | Short message to the buyer before connecting ("Auto insurance call from Florida") |
 | **AI call scoring** | Transcription, intent/sale detection, auto-disputes |
 | **Disputes & chargebacks** | Buyer disputes a call; admin approves; wallet adjusts |
 | **Tags & custom fields** | Pass click IDs / tags from numbers through to reports and postbacks |

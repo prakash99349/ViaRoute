@@ -193,6 +193,11 @@ model Campaign {
   maxSpamScore        Int?     // reject when the caller's spam score (0–100) is at or above this
   autoBlockShortCalls Int?     // block a caller after this many short calls in 24 hours
   shortCallSec        Int      @default(10)
+
+  // IVR (phone menu) played after the recording notice, before buyers are dialed; see routing/ivr.ts
+  ivr                 Json?
+  /** Played to the buyer before connecting, e.g. "Auto insurance call from {state}". */
+  whisperText         String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -395,6 +400,8 @@ model Call {
   attestation    String?      // STIR/SHAKEN from the carrier: A (full) | B (partial) | C (gateway)
   spamScore      Int?         // 0–100 from the reputation lookup
   lineType       String?      // mobile | landline | voip | toll_free | … from the reputation lookup
+  ivrPath        String?      // what the caller chose, e.g. "Main menu: Sales > ZIP"
+  ivrData        Json?        // digits the caller entered, e.g. { "zip": "33101" }
   callerNumber   String
   callerState    String?
   dialedNumber   String?

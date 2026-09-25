@@ -20,6 +20,7 @@ interface TelnyxEvent {
       end_time?: string;
       recording_urls?: { mp3?: string; wav?: string };
       shaken_stir_attestation?: string;
+      digits?: string;
     };
   };
 }
@@ -94,6 +95,9 @@ export class TelnyxWebhookController {
           break;
         case 'call.speak.ended':
           await this.engine.onSpeakEnded({ callControlId: id, at });
+          break;
+        case 'call.gather.ended':
+          await this.engine.onGathered({ callControlId: id, digits: p.digits ?? '', at });
           break;
         case 'call.hangup':
           await this.engine.onHangup({ callControlId: id, cause: p.hangup_cause ?? 'unknown', at: new Date(p.end_time ?? at) });

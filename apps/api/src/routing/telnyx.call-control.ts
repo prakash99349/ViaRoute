@@ -1,7 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { CarrierAuth } from '../telephony/telephony.types';
-import type { CallControl, DialRequest } from './call-control.types';
+import type { CallControl, DialRequest, GatherRequest } from './call-control.types';
 
 const BASE = 'https://api.telnyx.com/v2';
 
@@ -50,6 +50,20 @@ export class TelnyxCallControl implements CallControl {
 
   reject(id: string) {
     return this.action(id, 'reject', { cause: 'CALL_REJECTED' });
+  }
+
+  /** Speaks the prompt and collects digits; Telnyx sends call.gather.ended. */
+  gather(id: string, g: GatherRequest) {
+    return this.action(id, 'gather_using_speak', {
+      payload: g.prompt,
+      voice: 'female',
+      language: 'en-US',
+      minimum_digits: g.minDigits,
+      maximum_digits: g.maxDigits,
+      timeout_millis: g.timeoutSec * 1000,
+      terminating_digit: '#',
+      valid_digits: '0123456789*#',
+    });
   }
 
   private async action(id: string, name: string, body: Record<string, unknown> = {}) {

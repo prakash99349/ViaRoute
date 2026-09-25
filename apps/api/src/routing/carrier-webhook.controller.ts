@@ -9,7 +9,9 @@ import { CallEngine } from './call-engine.service';
 
 /** ViaRoute Carrier API v1 events (see docs/CARRIER_API.md). */
 interface CarrierEvent {
-  event?: 'call.inbound' | 'call.answered' | 'call.speak_ended' | 'call.hangup' | 'call.recording_saved';
+  event?: 'call.inbound' | 'call.answered' | 'call.speak_ended' | 'call.gathered' | 'call.hangup' | 'call.recording_saved';
+  /** call.gathered: keys pressed ("" when none). */
+  digits?: string;
   callId?: string;
   from?: string;
   to?: string;
@@ -60,6 +62,9 @@ export class CarrierWebhookController {
           break;
         case 'call.speak_ended':
           await this.engine.onSpeakEnded({ callControlId: e.callId, at });
+          break;
+        case 'call.gathered':
+          await this.engine.onGathered({ callControlId: e.callId, digits: e.digits ?? '', at });
           break;
         case 'call.hangup':
           await this.engine.onHangup({ callControlId: e.callId, cause: e.cause ?? 'unknown', at });
