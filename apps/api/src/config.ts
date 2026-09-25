@@ -27,9 +27,9 @@ function generatedSecret(name: string): string | undefined {
   return saved[name];
 }
 
-/** "https://App.example.com/ " → "app.example.com" (people paste URLs, quotes and spaces). */
+/** "*https://App.example.com/ " → "app.example.com" (people paste URLs, quotes, stars and spaces). */
 export function cleanDomain(v: string | undefined): string {
-  return (v ?? '').trim().replace(/^["']|["']$/g, '').replace(/^[a-z]+:\/\//i, '').replace(/[/?#].*$/, '').toLowerCase();
+  return (v ?? '').trim().replace(/^["'*]+|["']$/g, '').replace(/^[a-z]+:\/\//i, '').replace(/^\*?\./, '').replace(/[/?#].*$/, '').toLowerCase();
 }
 
 /** One-port platforms (xCloud, Coolify) set APP_DOMAIN; the other addresses follow from it. */
