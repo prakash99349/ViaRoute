@@ -29,6 +29,7 @@ export class TenantMiddleware implements NestMiddleware {
       req.tenant = t?.customDomainVerifiedAt ? t : null; // unverified domains don't serve a portal
     }
 
+    if (!req.tenant && config.unknownHostIsMainSite) return next();
     if (!req.tenant || req.tenant.status === 'CLOSED') {
       throw new NotFoundException('Portal not found');
     }

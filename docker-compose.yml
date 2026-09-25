@@ -49,10 +49,10 @@ services:
       TRUST_PROXY_HOPS: 2
       DATABASE_URL: postgresql://viaroute:${POSTGRES_PASSWORD:-viaroute-internal-db}@postgres:5432/viaroute?schema=public
       REDIS_URL: redis://redis:6379
-      ROOT_DOMAIN: ${APP_DOMAIN}
-      WEB_ORIGIN: https://${APP_DOMAIN}
-      API_ORIGIN: https://${APP_DOMAIN}/api
-      CUSTOM_DOMAIN_TARGET: ${APP_DOMAIN}
+      # Main-site address; the web and API addresses are worked out from it.
+      APP_DOMAIN: ${APP_DOMAIN}
+      # One domain only: any address that isn't a customer portal opens the main site.
+      UNKNOWN_HOST_IS_MAIN_SITE: "true"
       # Empty = generated once and kept in the secrets volume.
       JWT_SECRET: ${JWT_SECRET:-}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}

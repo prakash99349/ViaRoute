@@ -27,6 +27,15 @@ function generatedSecret(name: string): string | undefined {
   return saved[name];
 }
 
+/** "https://App.example.com/ " → "app.example.com" (people paste URLs, quotes and spaces). */
+export function cleanDomain(v: string | undefined): string {
+  return (v ?? '').trim().replace(/^["']|["']$/g, '').replace(/^[a-z]+:\/\//i, '').replace(/[/?#].*$/, '').toLowerCase();
+}
+
+/** One-port platforms (xCloud, Coolify) set APP_DOMAIN; the other addresses follow from it. */
+const appDomain = cleanDomain(process.env.APP_DOMAIN);
+const rootDomain = appDomain || cleanDomain(process.env.ROOT_DOMAIN) || 'localhost';
+
 function required(name: string): string {
   const v = process.env[name] || generatedSecret(name);
   if (!v) throw new Error(`Missing required env var ${name}`);
@@ -37,10 +46,10 @@ export const config = {
   port: Number(process.env.API_PORT ?? 4000),
   jwtSecret: required('JWT_SECRET'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
-  rootDomain: (process.env.ROOT_DOMAIN ?? 'localhost').toLowerCase(),
-  webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:3000',
+  rootDomain,
+  webOrigin: appDomain ? `https://${appDomain}` : (process.env.WEB_ORIGIN ?? 'http://localhost:3000'),
   /** Public URL of this API (for carrier webhook URLs), e.g. https://api.yourdomain.com */
-  apiOrigin: (process.env.API_ORIGIN ?? `http://localhost:${process.env.API_PORT ?? 4000}`).replace(/\/$/, ''),
+  apiOrigin: (appDomain ? `https://${appDomain}/api` : process.env.API_ORIGIN ?? `http://localhost:${process.env.API_PORT ?? 4000}`).replace(/\/$/, ''),
   smtpUrl: process.env.SMTP_URL ?? 'smtp://localhost:1025',
   mailFrom: process.env.MAIL_FROM ?? 'ViaRoute <no-reply@viaroute.local>',
   encryptionKey: required('ENCRYPTION_KEY'),
@@ -58,7 +67,12 @@ export const config = {
     TOLL_FREE: Number(process.env.NUMBER_PRICE_TOLL_FREE ?? 3),
   },
   /** Customers point their custom domain here with a CNAME record. */
-  customDomainTarget: (process.env.CUSTOM_DOMAIN_TARGET ?? `domains.${process.env.ROOT_DOMAIN ?? 'localhost'}`).toLowerCase(),
+  customDomainTarget: (process.env.CUSTOM_DOMAIN_TARGET || (appDomain || `domains.${rootDomain}`)).toLowerCase(),
+  /**
+   * Single-domain hosting (one-port setup): an address that is no portal opens the main site
+   * instead of "Portal not found", so a platform-assigned domain works even if APP_DOMAIN is off.
+   */
+  unknownHostIsMainSite: process.env.UNKNOWN_HOST_IS_MAIN_SITE === 'true',
 };
 
 /** Subdomains customers can never claim. */
