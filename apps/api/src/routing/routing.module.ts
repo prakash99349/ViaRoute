@@ -2,7 +2,7 @@ import { Controller, ForbiddenException, Get, Global, Module, Param, Query, Res 
 import { SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { Public } from '../common/decorators';
-import { StorageService } from '../common/storage.service';
+import { contentType, safeName, StorageService } from '../common/storage.service';
 import { CALL_CONTROLS, type CallControls } from './call-control.types';
 import { CallEngine } from './call-engine.service';
 import { SettingsService } from '../common/settings.service';
@@ -27,12 +27,15 @@ class FilesController {
 
   @Public()
   @Get('*path')
-  serve(@Param('path') path: string | string[], @Query('exp') exp: string, @Query('sig') sig: string, @Query('dl') dl: string | undefined, @Res() res: Response) {
+  async serve(@Param('path') path: string | string[], @Query('exp') exp: string, @Query('sig') sig: string, @Query('dl') dl: string | undefined, @Res() res: Response) {
     const key = Array.isArray(path) ? path.join('/') : path;
-    if (!this.storage.verify(key, Number(exp), sig) || !this.storage.exists(key)) throw new ForbiddenException('Link expired');
-    res.setHeader('Content-Type', key.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg');
+    if (!this.storage.verify(key, Number(exp), sig)) throw new ForbiddenException('Link expired');
+    // Bucket storage: hand the browser a short-lived bucket link; the audio doesn't pass through us.
+    if (this.storage.driver === 's3') return res.redirect(302, await this.storage.bucketUrl(key, dl));
+    if (!(await this.storage.exists(key))) throw new ForbiddenException('Link expired');
+    res.setHeader('Content-Type', contentType(key));
     res.setHeader('Cache-Control', 'private, max-age=600');
-    if (dl) res.setHeader('Content-Disposition', `attachment; filename="${dl.replace(/[^A-Za-z0-9._+-]/g, '_').slice(0, 100)}"`);
+    if (dl) res.setHeader('Content-Disposition', `attachment; filename="${safeName(dl)}"`);
     // Portals (other origins) play these in <audio>; the signed link is the access check.
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     this.storage.read(key).pipe(res);

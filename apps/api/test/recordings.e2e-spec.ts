@@ -103,10 +103,10 @@ describe('Recordings library', () => {
     const s = await setup();
     const c = await recordedCall(s.t, s.number);
     const key = (await prisma.call.findUniqueOrThrow({ where: { id: c.id } })).recordingUrl!;
-    expect(app.get(StorageService).exists(key)).toBe(true);
+    expect(await app.get(StorageService).exists(key)).toBe(true);
 
     await api(s.t).delete(`/recordings/${c.id}`).expect(200);
-    expect(app.get(StorageService).exists(key)).toBe(false);
+    expect(await app.get(StorageService).exists(key)).toBe(false);
     const after = await api(s.t).get(`/calls/${c.id}`).expect(200);
     expect(after.body).toMatchObject({ recordingLink: null, hasRecording: false });
     expect(after.body.recordingDeletedAt).not.toBeNull();

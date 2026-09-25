@@ -84,6 +84,19 @@ Open `http://<IP>.sslip.io:3000` and log in with the email and password above. C
 Emails (verification, invites) land in the test inbox at `http://<IP>:8025`. Open ports 3000, 4000 and 8025 in the firewall.
 Calls use the built-in Test carrier. Stop with `docker compose -f infra/docker-compose.trial.yml --env-file .env.trial down` (add `-v` to delete the data).
 
+## Launch setup (up to ~1,000–2,000 live calls)
+
+| Piece | Size | Where (example) | Setting |
+|---|---|---|---|
+| App server | 8 vCPU / 16 GB, dedicated (not shared) | DigitalOcean / Hetzner / Vultr, **US-East** (near the carriers) | runs `infra/docker-compose.prod.yml` |
+| PostgreSQL 17 | 4 vCPU / 16 GB, daily backups + point-in-time restore | DigitalOcean Managed DB (same region) | `DATABASE_URL` (`sslmode=require`) |
+| Redis / Valkey | 1–2 GB, fixed-price plan | DigitalOcean Managed Valkey (same region) | `REDIS_URL` (`rediss://…`) |
+| Recordings | pay per GB | Cloudflare R2 bucket + API token (Object Read & Write) | `S3_BUCKET`, `S3_ENDPOINT`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` |
+
+Avoid per-request-priced Redis (e.g. Upstash pay-as-you-go): the job queue polls constantly.
+Restrict the database and Redis to the app server's IP (trusted sources). Recording links are short-lived signed URLs;
+the bucket stays private.
+
 ## 1. Accounts & keys (before the server)
 
 - [ ] **Domain** in **Cloudflare** (e.g. `viaroute.com`)

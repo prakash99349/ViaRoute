@@ -9,6 +9,8 @@
     "test": "jest --runInBand"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
+    "@aws-sdk/s3-request-presigner": "^3.1141.0",
     "@nestjs/common": "^11.2.6",
     "@nestjs/core": "^11.2.6",
     "@nestjs/jwt": "^11.0.2",

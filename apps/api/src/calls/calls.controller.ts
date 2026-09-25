@@ -1,10 +1,12 @@
-import { BadRequestException, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
+import { BadRequestException, Controller, Get, HttpCode, Inject, Param, ParseUUIDPipe, Post, Query, Res } from '@nestjs/common';
 import { Transform, Type } from 'class-transformer';
 import { IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import type { Response } from 'express';
 import { CallStatus, Prisma, Role, tenantDb, type Tenant } from '@viaroute/db';
 import { SPAM_REASONS } from '../routing/spam.service';
 import { CurrentTenant, CurrentUser, Roles } from '../common/decorators';
+import Redis from 'ioredis';
+import { REDIS } from '../common/redis.module';
 import { StorageService } from '../common/storage.service';
 import type { AuthUser } from '../common/types';
 import { IsTimeZone, orNotFound } from '../common/validation';
@@ -86,6 +88,9 @@ class ExportDto extends CallFilterDto {
   @IsOptional() @IsString() @MaxLength(2000)
   columns?: string;
 }
+
+/** How long everyone watching the same live calls shares one answer. */
+const LIVE_CACHE_MS = 2000;
 
 /** Publishers only ever see their calls; buyers only calls sent to them. */
 function scope(user: AuthUser): Prisma.CallWhereInput {
@@ -256,7 +261,7 @@ const ORDER: Record<NonNullable<CallListDto['sort']>, Prisma.CallOrderByWithRela
 @Roles(...ALL_ROLES)
 @Controller('calls')
 export class CallsController {
-  constructor(private storage: StorageService, private postbacks: PostbackService) {}
+  constructor(private storage: StorageService, private postbacks: PostbackService, @Inject(REDIS) private redis: Redis) {}
 
   @Get()
   async list(@CurrentTenant() tenant: Tenant, @CurrentUser() user: AuthUser, @Query() f: CallListDto) {
@@ -271,16 +276,24 @@ export class CallsController {
     return { items: rows.map((c) => present(c, user)), total, page, pageSize };
   }
 
-  /** Every call happening right now. */
+  /**
+   * Every call happening right now. Live pages refresh every 2 s, so the answer is shared for 2 s
+   * (in Redis, across API servers) by everyone who sees the same calls: one query, not one per viewer.
+   */
   @Get('live')
   async live(@CurrentTenant() tenant: Tenant, @CurrentUser() user: AuthUser) {
+    const key = `live:${tenant.id}:${user.role}:${user.publisherId ?? user.buyerId ?? user.agentTargetId ?? ''}`;
+    const cached = await this.redis.get(key);
+    if (cached) return JSON.parse(cached);
     const rows = await tenantDb(tenant.id).call.findMany({
       where: { ...scope(user), status: { in: [CallStatus.RINGING, CallStatus.IN_PROGRESS] }, startedAt: { gte: new Date(Date.now() - 6 * 3600_000) } },
       include: CALL_INCLUDE,
       orderBy: { startedAt: 'desc' },
       take: 2000,
     });
-    return rows.map((c) => present(c, user));
+    const out = rows.map((c) => present(c, user));
+    await this.redis.set(key, JSON.stringify(out), 'PX', LIVE_CACHE_MS);
+    return out;
   }
 
   /** CDR columns this user may export. */
