@@ -38,6 +38,15 @@ async function http<T>(url: string, init: { method?: string; headers?: Record<st
   return json as T;
 }
 
+/** Bandwidth sends { verstat, attestationIndicator } (JSON, stringified by the webhook). */
+function stir(v?: string) {
+  try {
+    return (JSON.parse(v ?? '{}') as { attestationIndicator?: string }).attestationIndicator || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 const basic = (user: string, pass: string) => `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
 const missing = (what: string) => new ProviderError(`This carrier is missing its ${what}. Add it under Admin → Carriers.`);
 
@@ -77,7 +86,7 @@ export class TwimlDialect implements MarkupDialect {
 
   async parse(hook: Hook, b: Body, q: Body): Promise<MarkupEvent> {
     switch (hook) {
-      case 'answer': return { callId: b.CallSid, from: e164(b.From), to: e164(b.To) };
+      case 'answer': return { callId: b.CallSid, from: e164(b.From), to: e164(b.To), attestation: /Passed-([ABC])$/.exec(b.StirVerstat ?? '')?.[1] };
       case 'flow': return { callId: q.call };
       case 'join': return { callId: b.CallSid };
       case 'status': return { callId: b.CallSid, ended: TERMINAL.has(b.CallStatus), cause: b.CallStatus };
@@ -196,7 +205,7 @@ export class PlivoDialect implements MarkupDialect {
   async parse(hook: Hook, b: Body, q: Body): Promise<MarkupEvent> {
     if (b.Direction === 'outbound' && b.RequestUUID && b.CallUUID) await this.kv.set(`plivo:uuid:${b.RequestUUID}`, b.CallUUID, 6 * 3600);
     switch (hook) {
-      case 'answer': return { callId: b.CallUUID, from: e164(b.From), to: e164(b.To) };
+      case 'answer': return { callId: b.CallUUID, from: e164(b.From), to: e164(b.To), attestation: b.STIRAttestation || undefined };
       case 'flow': return { callId: q.call };
       case 'join': return { callId: this.legId(b) };
       case 'status': return { callId: this.legId(b), ended: true, cause: b.HangupCause ?? b.CallStatus };
@@ -306,7 +315,7 @@ export class BandwidthDialect implements MarkupDialect {
 
   async parse(hook: Hook, b: Body, q: Body): Promise<MarkupEvent> {
     switch (hook) {
-      case 'answer': return { callId: b.callId, from: e164(b.from), to: e164(b.to) };
+      case 'answer': return { callId: b.callId, from: e164(b.from), to: e164(b.to), attestation: stir(b.stirShaken) };
       case 'flow': return { callId: q.call };
       case 'join': return { callId: b.callId };
       case 'status': return { callId: b.callId, ended: b.eventType === 'disconnect', cause: b.cause };

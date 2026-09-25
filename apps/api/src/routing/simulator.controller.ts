@@ -11,8 +11,12 @@ class SimulateDto {
   @Matches(E164, { message: 'Tracking number must look like +14155550100' })
   to: string;
 
-  @Matches(E164, { message: 'Caller number must look like +13055550123' })
+  @Matches(/^(\+[1-9]\d{7,14}|anonymous|restricted|unknown)$/, { message: 'Caller number must look like +13055550123 (or "anonymous" to test hidden caller IDs)' })
   from: string;
+
+  /** STIR/SHAKEN grade the simulated carrier reports. */
+  @IsOptional() @IsIn(['A', 'B', 'C'])
+  attestation?: 'A' | 'B' | 'C';
 
   @IsOptional() @IsArray() @ArrayMaxSize(10) @IsIn(['answer', 'no_answer', 'busy'], { each: true })
   outcomes?: BuyerOutcome[];

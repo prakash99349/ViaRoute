@@ -57,7 +57,7 @@ export class VoiceWebhookController {
         case 'answer': {
           if (!ev.callId || !ev.from || !ev.to) return send([{ t: 'reject' }]);
           const id = ev.callId;
-          const ctx = await captureMarkup(id, () => this.engine.onInbound(dialect.kind, { callControlId: id, from: ev.from!, to: ev.to!, at }, carrier.id));
+          const ctx = await captureMarkup(id, () => this.engine.onInbound(dialect.kind, { callControlId: id, from: ev.from!, to: ev.to!, at, attestation: ev.attestation }, carrier.id));
           return send(ctx.verbs.length ? ctx.verbs : [{ t: 'join', room: room(id) }]); // wait in the room while buyers ring
         }
         case 'flow': {

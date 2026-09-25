@@ -56,7 +56,7 @@ Also required:
 
 | `event` | Fields | When |
 |---|---|---|
-| `call.inbound` | `callId`, `from`, `to`, `at` | A call arrives on one of the numbers (`to`). Don't answer it yourself — wait for the `answer` command. |
+| `call.inbound` | `callId`, `from`, `to`, `at`, optional `attestation` | A call arrives on one of the numbers (`to`). Don't answer it yourself — wait for the `answer` command. Send the STIR/SHAKEN grade of the caller ID as `attestation`: `"A"`, `"B"` or `"C"` (leave it out if the call wasn't signed) — campaigns can require a minimum grade. Hidden caller IDs: send `"from": "anonymous"`. |
 | `call.answered` | `callId`, `at` | An outgoing leg you started with `POST /calls` was answered. |
 | `call.speak_ended` | `callId`, `at` | A `speak` command finished playing. |
 | `call.hangup` | `callId`, `at`, `cause` | **Any** leg ended — caller or buyer, answered or not (`cause`: e.g. `normal_clearing`, `no_answer`, `busy`, `timeout`). |

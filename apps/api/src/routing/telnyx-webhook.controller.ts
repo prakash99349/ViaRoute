@@ -19,6 +19,7 @@ interface TelnyxEvent {
       hangup_cause?: string;
       end_time?: string;
       recording_urls?: { mp3?: string; wav?: string };
+      shaken_stir_attestation?: string;
     };
   };
 }
@@ -86,7 +87,7 @@ export class TelnyxWebhookController {
     try {
       switch (type) {
         case 'call.initiated':
-          if (p.direction === 'incoming' && p.from && p.to) await this.engine.onInbound('telnyx', { callControlId: id, from: p.from, to: p.to, at }, carrier?.id);
+          if (p.direction === 'incoming' && p.from && p.to) await this.engine.onInbound('telnyx', { callControlId: id, from: p.from, to: p.to, at, attestation: p.shaken_stir_attestation }, carrier?.id);
           break;
         case 'call.answered':
           await this.engine.onAnswered({ callControlId: id, at });

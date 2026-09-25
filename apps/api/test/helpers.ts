@@ -21,7 +21,7 @@ export async function resetDb() {
   await redis.flushdb(); // test Redis DB only: live call state, caps, quotes, queues
   await redis.quit();
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "AuthToken","AuditLog","Postback","Call","Route","PhoneNumber","Buyer","Publisher","Campaign","Transaction","User","Tenant","Plan","TenantNote","Provider" CASCADE',
+    'TRUNCATE "AuthToken","AuditLog","Postback","Call","Route","PhoneNumber","Buyer","Publisher","Campaign","Transaction","User","Tenant","Plan","TenantNote","Provider","GlobalBlock","PlatformSetting" CASCADE',
   );
   await prisma.plan.createMany({
     data: [

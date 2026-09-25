@@ -39,6 +39,8 @@ export interface MarkupEvent {
   callId?: string;
   from?: string;
   to?: string;
+  /** STIR/SHAKEN attestation of an inbound call: A | B | C */
+  attestation?: string;
   /** The leg is over (any reason). */
   ended?: boolean;
   cause?: string;

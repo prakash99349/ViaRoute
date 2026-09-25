@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AdminController } from './admin/admin.controller';
 import { CustomersController } from './admin/customers.controller';
 import { ProvidersController } from './admin/providers.controller';
+import { AdminSpamController } from './admin/spam.controller';
 import { AuthModule } from './auth/auth.module';
 import { BillingModule } from './billing/billing.module';
 import { CallsModule } from './calls/calls.module';
@@ -40,7 +41,7 @@ import { TenantController } from './tenant/tenant.controller';
     CampaignsModule,
     CallsModule,
   ],
-  controllers: [HealthController, TenantController, AdminController, CustomersController, ProvidersController, TeamController],
+  controllers: [HealthController, TenantController, AdminController, CustomersController, ProvidersController, AdminSpamController, TeamController],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AuthGuard },

@@ -28,6 +28,9 @@ export interface CallRow {
   publisher: { id: string; name: string } | null;
   buyer: { id: string; name: string } | null;
   target?: { id: string; name: string } | null;
+  attestation?: string | null;
+  spamScore?: number | null;
+  lineType?: string | null;
   revenue?: string;
   payout?: string;
   cost?: string;
@@ -58,6 +61,14 @@ export const REASONS: Record<string, string> = {
   campaign_paused: 'Campaign paused',
   number_not_assigned: 'Number not on a campaign',
   account_suspended: 'Account suspended',
+  account_limit: 'Account call limit reached',
+  carrier_disabled: 'Carrier turned off',
+  spam_global_block: 'Spam: known spammer',
+  spam_anonymous: 'Spam: hidden caller ID',
+  spam_prefix: 'Spam: blocked prefix',
+  spam_rate_limit: 'Spam: called too often',
+  spam_attestation: 'Spam: caller ID not verified',
+  spam_reputation: 'Spam: high spam score',
 };
 
 /** Call details dialog: route, money, recording player, postbacks, block caller. */
@@ -91,6 +102,8 @@ export function CallDrawer({ id, onClose, onChanged }: { id: string; onClose: ()
               ['Publisher', c.publisher?.name ?? '—'],
               ['Buyer', c.buyer?.name ?? (c.target ? 'Direct (no buyer)' : '—')],
               ...(c.target ? [['Target', c.target.name] as [string, string]] : []),
+              ...(c.attestation ? [['Caller ID check', `STIR/SHAKEN grade ${c.attestation}`] as [string, string]] : []),
+              ...(c.spamScore !== null && c.spamScore !== undefined ? [['Spam score', `${c.spamScore} / 100${c.lineType ? ` · ${c.lineType.replace(/_/g, ' ')}` : ''}`] as [string, string]] : []),
               ['Buyers tried', c.attempts],
               ['Call length', duration(c.durationSec)],
               ['Talk time with buyer', duration(c.connectedSec)],

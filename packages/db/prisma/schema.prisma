@@ -183,6 +183,16 @@ model Campaign {
   duplicateWindowSec  Int      @default(86400) // repeat callers inside this window are not paid
   fallbackNumber      String?  // used when no buyer can take the call
   repeatRouting       RepeatRouting @default(DIFFERENT) // where repeat callers are sent
+
+  // Spam protection (checked before any buyer is dialed; blocked calls are rejected, never billed)
+  blockAnonymous      Boolean  @default(true)  // hidden, anonymous or invalid caller IDs
+  callerRateLimit     Int?     // at most this many calls from one caller…
+  callerRateWindowMin Int      @default(60) // …per this many minutes
+  blockedPrefixes     String[] @default([]) // e.g. "+1900", "+234", "+1415555"
+  minAttestation      String?  // STIR/SHAKEN: "A" = full, "B" = partial; null = don't check
+  maxSpamScore        Int?     // reject when the caller's spam score (0–100) is at or above this
+  autoBlockShortCalls Int?     // block a caller after this many short calls in 24 hours
+  shortCallSec        Int      @default(10)
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
@@ -217,6 +227,7 @@ model BlockedNumber {
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   e164      String
   reason    String?
+  auto      Boolean  @default(false) // added by spam protection, not by a person
   createdAt DateTime @default(now())
 
   @@unique([tenantId, e164])
@@ -381,6 +392,9 @@ model Call {
   providerId     String?      @db.Uuid
   carrier        Provider?    @relation(fields: [providerId], references: [id], onDelete: SetNull)
   carrierCost    Decimal      @default(0) @db.Decimal(10, 4) // what the carrier charged us for this call
+  attestation    String?      // STIR/SHAKEN from the carrier: A (full) | B (partial) | C (gateway)
+  spamScore      Int?         // 0–100 from the reputation lookup
+  lineType       String?      // mobile | landline | voip | toll_free | … from the reputation lookup
   callerNumber   String
   callerState    String?
   dialedNumber   String?
@@ -531,4 +545,20 @@ model Provider {
   numbers PhoneNumber[]
   calls   Call[]
   tenants Tenant[]
+}
+
+/** Numbers or prefixes blocked for every customer (platform admin). A pattern ending in * is a prefix. */
+model GlobalBlock {
+  id        String   @id @default(uuid()) @db.Uuid
+  pattern   String   @unique // "+13055550100" or "+1900*"
+  reason    String?
+  createdBy String?  @db.Uuid
+  createdAt DateTime @default(now())
+}
+
+/** Platform settings edited in the admin panel. Secret values are stored encrypted. */
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }

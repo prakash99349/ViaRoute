@@ -196,6 +196,10 @@ These came out of going through the code, not just the feature list.
 
 ---
 
+## 🛡️ Spam protection ✅ Done
+
+> Per-campaign rules (hidden caller IDs, blocked prefixes, calls per caller, STIR/SHAKEN minimum grade, spam-score threshold, auto-block of short-call spammers), platform-wide blocklist with prefixes, IPQualityScore spam-score lookups (cached 7 days, fail-open), spam score / attestation / line type on every call, customer **Spam & blocking** page and admin **Spam protection** page.
+
 ## 🅵 Phase F — Growth features (v2)
 
 | Feature | Value |

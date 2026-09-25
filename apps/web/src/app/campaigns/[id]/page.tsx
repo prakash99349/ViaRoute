@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Success } from '@/components/auth-card';
 import { AppShell } from '@/components/app-shell';
-import { ArrowLeft, Briefcase, Clock, Crosshair, FlaskConical, Gauge, Hash, MapPin, Pencil, PhoneOutgoing, Plus, Route as RouteIcon, SlidersHorizontal, Target, Trash2, Unlink } from 'lucide-react';
+import { ArrowLeft, Briefcase, Clock, Crosshair, ShieldAlert, FlaskConical, Gauge, Hash, MapPin, Pencil, PhoneOutgoing, Plus, Route as RouteIcon, SlidersHorizontal, Target, Trash2, Unlink } from 'lucide-react';
 import { Alert, Badge, Button, Card, CardHeader, Empty, Field, IconButton, Initials, Modal, Select, Spinner, Toggle, table } from '@/components/ui';
 import { CapsFields, capsFrom } from '@/components/routing-fields';
 import { api, duration, formatPhone, money } from '@/lib/api';
@@ -78,11 +78,117 @@ interface Campaign {
   duplicateWindowSec: number;
   fallbackNumber: string | null;
   repeatRouting: 'DIFFERENT' | 'SAME' | 'NORMAL';
+  blockAnonymous: boolean;
+  callerRateLimit: number | null;
+  callerRateWindowMin: number;
+  blockedPrefixes: string[];
+  minAttestation: 'A' | 'B' | null;
+  maxSpamScore: number | null;
+  autoBlockShortCalls: number | null;
+  shortCallSec: number;
   routes: Route[];
   phoneNumbers: NumberRow[];
 }
 
 // ---------------------------------------------------------------------------
+
+/** Spam protection rules, checked before any buyer is dialed. */
+function SpamCard({ c, onSaved }: { c: Campaign; onSaved: () => void }) {
+  const [anon, setAnon] = useState(c.blockAnonymous);
+  const [rate, setRate] = useState(c.callerRateLimit !== null);
+  const [score, setScore] = useState(c.maxSpamScore !== null);
+  const [auto, setAuto] = useState(c.autoBlockShortCalls !== null);
+  const { busy, error, notice, run } = useAction();
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const n = (k: string) => Number(f.get(k));
+    const prefixes = String(f.get('prefixes') ?? '')
+      .split(/[\s,;]+/)
+      .map((p) => p.trim())
+      .filter(Boolean);
+    const ok = await run(
+      () =>
+        api(`/campaigns/${c.id}`, {
+          method: 'PATCH',
+          json: {
+            blockAnonymous: anon,
+            callerRateLimit: rate ? n('rateLimit') : null,
+            ...(rate ? { callerRateWindowMin: n('rateWindow') } : {}),
+            blockedPrefixes: prefixes,
+            minAttestation: f.get('attestation') || null,
+            maxSpamScore: score ? n('maxScore') : null,
+            autoBlockShortCalls: auto ? n('autoCalls') : null,
+            ...(auto ? { shortCallSec: n('autoSec') } : {}),
+          },
+        }),
+      'Spam protection saved',
+    );
+    if (ok) onSaved();
+  }
+
+  const box = (on: boolean) => `rounded-lg border p-3 transition ${on ? 'border-border-strong' : 'border-border bg-subtle/40'}`;
+  const num = 'h-9 w-20 rounded-lg border border-border-strong bg-card px-2.5 text-sm outline-none focus:border-foreground/40';
+
+  return (
+    <Card>
+      <CardHeader icon={ShieldAlert} title="Spam protection" subtitle="Checked before any buyer is dialed. Blocked calls are rejected — never billed, never paid.">
+        <Link href="/spam" className="text-[13px] font-medium text-accent">Blocked calls →</Link>
+      </CardHeader>
+      <form onSubmit={submit} className="mt-4 space-y-4">
+        {error && <Alert>{error}</Alert>}
+        {notice && <Success>{notice}</Success>}
+        <div className="grid gap-3 lg:grid-cols-2">
+          <div className={box(anon)}>
+            <Toggle label="Block hidden caller IDs" checked={anon} onChange={setAnon} hint="Anonymous, private, restricted or impossible numbers." />
+          </div>
+          <div className={box(rate)}>
+            <Toggle label="Limit calls per caller" checked={rate} onChange={setRate} hint={rate ? undefined : 'Off — a caller can call any number of times.'} />
+            {rate && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                At most <input name="rateLimit" type="number" min={1} max={1000} required defaultValue={c.callerRateLimit ?? 3} aria-label="Calls" className={num} />
+                calls per <input name="rateWindow" type="number" min={1} max={10080} required defaultValue={c.callerRateWindowMin} aria-label="Minutes" className={num} /> minutes
+              </div>
+            )}
+          </div>
+          <div className={box(auto)}>
+            <Toggle label="Auto-block short-call spammers" checked={auto} onChange={setAuto} hint={auto ? undefined : 'Off — robo-dialers that hang up fast keep getting through.'} />
+            {auto && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                Block after <input name="autoCalls" type="number" min={2} max={100} required defaultValue={c.autoBlockShortCalls ?? 3} aria-label="Short calls" className={num} />
+                calls shorter than <input name="autoSec" type="number" min={1} max={120} required defaultValue={c.shortCallSec} aria-label="Seconds" className={num} /> sec in 24 h
+              </div>
+            )}
+          </div>
+          <div className={box(score)}>
+            <Toggle label="Reject high spam scores" checked={score} onChange={setScore} hint={score ? undefined : 'Off — uses the platform\'s spam-score lookup when on.'} />
+            {score && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                Reject when the score is <input name="maxScore" type="number" min={1} max={100} required defaultValue={c.maxSpamScore ?? 85} aria-label="Score" className={num} /> or higher (0–100)
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Select label="Caller ID verification (STIR/SHAKEN)" name="attestation" defaultValue={c.minAttestation ?? ''} hint="Carriers grade how sure they are the caller ID is real. Strict settings also block some real callers.">
+            <option value="">Don&apos;t check</option>
+            <option value="B">Require grade A or B (known customer)</option>
+            <option value="A">Require grade A only (fully verified)</option>
+          </Select>
+          <Field
+            label="Blocked prefixes"
+            name="prefixes"
+            defaultValue={c.blockedPrefixes.join(', ')}
+            placeholder="e.g. +1900, +234, +1702555"
+            hint="Callers starting with these are rejected: area codes, countries or exchanges."
+          />
+        </div>
+        <Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save spam protection'}</Button>
+      </form>
+    </Card>
+  );
+}
 
 function SettingsCard({ c, onSaved }: { c: Campaign; onSaved: () => void }) {
   const [active, setActive] = useState(c.active);
@@ -539,6 +645,14 @@ const REASONS: Record<string, string> = {
   campaign_paused: 'Campaign is paused',
   number_not_assigned: 'Number has no campaign',
   account_suspended: 'Account suspended',
+  account_limit: 'Account call limit reached',
+  carrier_disabled: 'Carrier turned off',
+  spam_global_block: 'Spam: known spammer',
+  spam_anonymous: 'Spam: hidden caller ID',
+  spam_prefix: 'Spam: blocked prefix',
+  spam_rate_limit: 'Spam: called too often',
+  spam_attestation: 'Spam: caller ID not verified',
+  spam_reputation: 'Spam: high spam score',
 };
 
 function TestCallCard({ c }: { c: Campaign }) {
@@ -660,6 +774,7 @@ function CampaignContent() {
       <TestCallCard c={c} />
       <RoutesCard c={c} onChanged={reload} />
       <NumbersCard c={c} onChanged={reload} />
+      <SpamCard c={c} onSaved={reload} />
       <SettingsCard key={JSON.stringify([c.name, c.active, c.recordCalls])} c={c} onSaved={reload} />
     </div>
   );

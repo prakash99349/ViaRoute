@@ -37,6 +37,8 @@ export interface InboundEvent {
   from: string;
   to: string;
   at: Date;
+  /** STIR/SHAKEN attestation from the carrier: "A" | "B" | "C" (missing = not signed). */
+  attestation?: string;
 }
 
 export interface LegEvent {

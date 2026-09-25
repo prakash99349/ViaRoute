@@ -17,6 +17,8 @@ export interface SimScenario {
   hangupBy?: 'caller' | 'buyer';
   /** Real milliseconds between simulated events (small in tests, ~400 for a watchable demo). */
   stepMs?: number;
+  /** STIR/SHAKEN grade the simulated carrier reports (A | B | C). */
+  attestation?: string;
 }
 
 const SPEAK_SEC = 4;
@@ -24,7 +26,7 @@ const RING_SEC = 6;
 const BUSY_SEC = 2;
 
 interface Session {
-  scenario: Required<Omit<SimScenario, 'to' | 'from'>>;
+  scenario: Required<Omit<SimScenario, 'to' | 'from' | 'attestation'>>;
   inboundId: string;
   attempt: number;
   /** Simulated clock (ms). Starts in the past so the call ends about "now". */
@@ -74,7 +76,7 @@ export class SimulatorCallControl implements CallControl {
       talkSec: 0,
     };
     this.sessions.set(inboundId, session);
-    return this.engine.onInbound('simulator', { callControlId: inboundId, from: s.from, to: s.to, at: new Date(session.clock) });
+    return this.engine.onInbound('simulator', { callControlId: inboundId, from: s.from, to: s.to, at: new Date(session.clock), attestation: s.attestation });
   }
 
   /** Resolves when every queued event of the call has been delivered (used by tests). */

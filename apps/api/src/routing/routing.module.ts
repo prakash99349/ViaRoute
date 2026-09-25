@@ -5,7 +5,10 @@ import { Public } from '../common/decorators';
 import { StorageService } from '../common/storage.service';
 import { CALL_CONTROLS, type CallControls } from './call-control.types';
 import { CallEngine } from './call-engine.service';
+import { SettingsService } from '../common/settings.service';
 import { CapsService } from './caps.service';
+import { SpamController } from './spam.controller';
+import { SpamService } from './spam.service';
 import { PostbackService } from './postback.service';
 import { SimulatorCallControl } from './simulator.call-control';
 import { SimulatorController } from './simulator.controller';
@@ -34,11 +37,13 @@ class FilesController {
 
 @Global()
 @Module({
-  controllers: [TelnyxWebhookController, CarrierWebhookController, VoiceWebhookController, SimulatorController, FilesController],
+  controllers: [TelnyxWebhookController, CarrierWebhookController, VoiceWebhookController, SimulatorController, SpamController, FilesController],
   providers: [
     StorageService,
     CapsService,
     PostbackService,
+    SettingsService,
+    SpamService,
     SimulatorCallControl,
     CallEngine,
     {
@@ -48,6 +53,6 @@ class FilesController {
       useFactory: (simulator: SimulatorCallControl): Pick<CallControls, 'simulator'> => ({ simulator }),
     },
   ],
-  exports: [StorageService, CapsService, PostbackService, CallEngine, SimulatorCallControl],
+  exports: [StorageService, CapsService, PostbackService, CallEngine, SimulatorCallControl, SettingsService, SpamService],
 })
 export class RoutingModule {}

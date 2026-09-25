@@ -16,6 +16,8 @@ interface CarrierEvent {
   at?: string;
   cause?: string;
   recordingUrl?: string;
+  /** STIR/SHAKEN attestation of call.inbound: "A" | "B" | "C" */
+  attestation?: string;
 }
 
 const MAX_SKEW_SEC = 300;
@@ -51,7 +53,7 @@ export class CarrierWebhookController {
     try {
       switch (e.event) {
         case 'call.inbound':
-          if (e.from && e.to) await this.engine.onInbound('custom', { callControlId: e.callId, from: e.from, to: e.to, at }, carrier.id);
+          if (e.from && e.to) await this.engine.onInbound('custom', { callControlId: e.callId, from: e.from, to: e.to, at, attestation: e.attestation }, carrier.id);
           break;
         case 'call.answered':
           await this.engine.onAnswered({ callControlId: e.callId, at });

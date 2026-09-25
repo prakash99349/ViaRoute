@@ -3,6 +3,7 @@ import { Transform, Type } from 'class-transformer';
 import { IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import type { Response } from 'express';
 import { CallStatus, Prisma, Role, tenantDb, type Tenant } from '@viaroute/db';
+import { SPAM_REASONS } from '../routing/spam.service';
 import { CurrentTenant, CurrentUser, Roles } from '../common/decorators';
 import { StorageService } from '../common/storage.service';
 import type { AuthUser } from '../common/types';
@@ -40,6 +41,10 @@ export class CallFilterDto {
 
   @IsOptional() @IsIn(['true', 'false'])
   duplicate?: 'true' | 'false';
+
+  /** "true": only calls stopped by spam protection or the blocklist. */
+  @IsOptional() @IsIn(['true', 'false'])
+  spam?: 'true' | 'false';
 
   @IsOptional() @IsIn(['true', 'false'])
   recorded?: 'true' | 'false';
@@ -104,6 +109,7 @@ export function filterWhere(f: CallFilterDto, user: AuthUser): Prisma.CallWhereI
     ...(f.status ? { status: f.status } : {}),
     ...(f.converted ? { converted: f.converted === 'true' } : {}),
     ...(f.duplicate ? { duplicate: f.duplicate === 'true' } : {}),
+    ...(f.spam === 'true' ? { rejectReason: { in: [...SPAM_REASONS] } } : f.spam === 'false' ? { OR: [{ rejectReason: null }, { rejectReason: { notIn: [...SPAM_REASONS] } }] } : {}),
     ...(f.recorded ? { recordingUrl: f.recorded === 'true' ? { not: null } : null } : {}),
     ...(f.state ? { callerState: f.state } : {}),
     ...(f.number ? { dialedNumber: { contains: digits(f.number) } } : {}),
@@ -133,6 +139,9 @@ function present(c: CallRow, user: AuthUser) {
     callerState: c.callerState,
     dialedNumber: c.dialedNumber,
     numberLabel: c.phoneNumber?.label ?? null,
+    attestation: c.attestation,
+    spamScore: c.spamScore,
+    lineType: c.lineType,
     status: c.status,
     rejectReason: c.rejectReason,
     duplicate: c.duplicate,
@@ -163,6 +172,14 @@ const REASONS: Record<string, string> = {
   campaign_paused: 'Campaign paused',
   number_not_assigned: 'Number not on a campaign',
   account_suspended: 'Account suspended',
+  account_limit: 'Account call limit',
+  carrier_disabled: 'Carrier turned off',
+  spam_global_block: 'Spam: platform blocklist',
+  spam_anonymous: 'Spam: hidden caller ID',
+  spam_prefix: 'Spam: blocked prefix',
+  spam_rate_limit: 'Spam: too many calls',
+  spam_attestation: 'Spam: caller ID not verified',
+  spam_reputation: 'Spam: high spam score',
 };
 
 type Cell = string | number;

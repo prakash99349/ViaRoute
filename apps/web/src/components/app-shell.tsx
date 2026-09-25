@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import {
   Briefcase, Crown, CreditCard, Crosshair, FileSpreadsheet, Hash, LayoutDashboard, LifeBuoy, LogOut, Megaphone, Menu, Network, PauseCircle, Phone, Plus, Radio, Search,
-  Settings, Tag, Target, Users, Wallet, X, type LucideIcon,
+  Settings, ShieldAlert, Tag, Target, Users, Wallet, X, type LucideIcon,
 } from 'lucide-react';
 import { api, money } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -48,6 +48,7 @@ const TENANT_NAV: NavGroup[] = [
       { href: '/publishers', label: 'Publishers', icon: Megaphone, roles: STAFF },
       { href: '/buyers', label: 'Buyers', icon: Briefcase, roles: STAFF },
       { href: '/targets', label: 'Targets', icon: Crosshair, roles: STAFF },
+      { href: '/spam', label: 'Spam & blocking', icon: ShieldAlert, roles: STAFF },
     ],
   },
   {
@@ -65,6 +66,7 @@ const ADMIN_NAV: NavGroup[] = [
     items: [
       { href: '/admin', label: 'Customers', icon: Crown },
       { href: '/admin/carriers', label: 'Carriers', icon: Network },
+      { href: '/admin/spam', label: 'Spam protection', icon: ShieldAlert },
       { href: '/admin/plans', label: 'Plans', icon: Tag },
       { href: '/settings', label: 'Settings', icon: Settings },
     ],

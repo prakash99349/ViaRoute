@@ -1,13 +1,14 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post } from '@nestjs/common';
 import { PartialType } from '@nestjs/mapped-types';
 import {
-  IsBoolean, IsEnum, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateIf,
+  ArrayMaxSize, IsArray, IsBoolean, IsEnum, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, MinLength, ValidateIf,
 } from 'class-validator';
 import { NumberStatus, Prisma, RepeatRouting, Role, tenantDb, type Tenant } from '@viaroute/db';
 import { CurrentTenant, CurrentUser, Roles } from '../common/decorators';
 import type { AuthUser } from '../common/types';
 import { assertValid, E164, orNotFound, Trim, TrimOrNull } from '../common/validation';
 import { validateGeoRules, validateSchedule, type GeoRules, type Schedule } from '../routing/rules';
+import { normalizePrefix } from '../routing/spam.service';
 
 class CampaignDto {
   @Trim() @IsString() @MinLength(2) @MaxLength(80)
@@ -36,6 +37,31 @@ class CampaignDto {
 
   @IsOptional() @IsEnum(RepeatRouting)
   repeatRouting?: RepeatRouting;
+
+  // Spam protection
+  @IsOptional() @IsBoolean()
+  blockAnonymous?: boolean;
+
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(1) @Max(1000)
+  callerRateLimit?: number | null;
+
+  @IsOptional() @IsInt() @Min(1) @Max(60 * 24 * 7)
+  callerRateWindowMin?: number;
+
+  @IsOptional() @IsArray() @ArrayMaxSize(200) @Matches(/^\+?\d{1,15}$/, { each: true, message: 'Prefixes are digits like +1900 or +234' })
+  blockedPrefixes?: string[];
+
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsIn(['A', 'B'])
+  minAttestation?: 'A' | 'B' | null;
+
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(1) @Max(100)
+  maxSpamScore?: number | null;
+
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(2) @Max(100)
+  autoBlockShortCalls?: number | null;
+
+  @IsOptional() @IsInt() @Min(1) @Max(120)
+  shortCallSec?: number;
 }
 
 class UpdateCampaignDto extends PartialType(CampaignDto) {}
@@ -159,7 +185,7 @@ export class CampaignsController {
   async update(@CurrentTenant() tenant: Tenant, @CurrentUser() me: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateCampaignDto) {
     const db = tenantDb(tenant.id);
     orNotFound(await db.campaign.findUnique({ where: { id } }), 'Campaign');
-    const c = await db.campaign.update({ where: { id }, data: dto });
+    const c = await db.campaign.update({ where: { id }, data: { ...dto, ...(dto.blockedPrefixes ? { blockedPrefixes: dto.blockedPrefixes.map(normalizePrefix) } : {}) } });
     await db.auditLog.create({ data: { tenantId: tenant.id, userId: me.sub, action: 'campaign.update', entity: 'Campaign', entityId: id, meta: dto as object } });
     return c;
   }

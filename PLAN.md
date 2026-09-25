@@ -833,6 +833,8 @@ flowchart LR
 
 **Carrier management ✅ (Phase B)** — Admin → Carriers: Telnyx accounts and a Test carrier, encrypted API keys (never shown again), test-connection, per-carrier webhook URL checked with that account's public key, Active / Draining / Off, default carrier and per-customer carrier. Every call records carrier cost; margins per carrier, customer and platform (gross margin on the admin dashboard). The first carrier is created from .env automatically. **Custom API carriers**: any carrier/softswitch plugs in through the ViaRoute Carrier API (docs/CARRIER_API.md) with HMAC-signed webhooks and an optional numbers API; admins can add existing numbers to customers. **Twilio, SignalWire, Plivo, Bandwidth and Vonage** carriers through one conference-based adapter (TwiML / Plivo XML / BXML / NCCO). 142 API tests passing.
 
+**Spam protection ✅** — per-campaign rules (hidden IDs, prefixes, calls per caller, STIR/SHAKEN grade, spam score, auto-block short-call spammers), platform blocklist, IPQualityScore lookups, Spam & blocking pages for customers and admin. Blocked calls are never billed. 150 API tests passing.
+
 **Next: see [IMPROVEMENTS.md](IMPROVEMENTS.md)** for the full improvement plan (admin customer management → provider management → hardening).
 
 **Still for later (v2 / pre-launch hardening):** RTB, number pooling (DNI) JS snippet, IVR builder, AI transcription/scoring, Stripe auto-recharge, recordings on Cloudflare R2, Sentry, Postgres Row-Level Security, 2FA backup codes

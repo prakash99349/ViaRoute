@@ -8,6 +8,7 @@ import { DEFAULT_PER_MINUTE } from '../config';
 import { StorageService } from '../common/storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { stateForNumber } from './area-codes';
+import { SpamService } from './spam.service';
 import { CALL_CONTROLS, type CallControl, type SharedCallControls, type HangupEvent, type InboundEvent, type LegEvent, type ProviderName, type RecordingEvent } from './call-control.types';
 import { CapsService, type CapLimits } from './caps.service';
 import { fillMacros, PostbackService } from './postback.service';
@@ -103,6 +104,7 @@ export class CallEngine {
   constructor(
     @Inject(CALL_CONTROLS) private controls: SharedCallControls,
     private providers: ProvidersService,
+    private spam: SpamService,
     @Inject(REDIS) private redis: Redis,
     private caps: CapsService,
     private wallet: WalletService,
@@ -145,6 +147,7 @@ export class CallEngine {
         provider,
         providerId: carrier?.id,
         callerNumber: ev.from,
+        attestation: ev.attestation?.toUpperCase().slice(0, 1) || null,
         callerState: stateForNumber(ev.from),
         dialedNumber: ev.to,
         startedAt: ev.at,
@@ -154,7 +157,7 @@ export class CallEngine {
 
     // --- Hard rejections (caller hears nothing billable) ---
     const blocked = await prisma.blockedNumber.findUnique({ where: { tenantId_e164: { tenantId: tenant.id, e164: ev.from } } });
-    const reason =
+    let reason: string | null =
       carrier?.status === 'DISABLED' ? 'carrier_disabled'
       : tenant.status === TenantStatus.SUSPENDED || tenant.status === TenantStatus.CLOSED ? 'account_suspended'
       : tenant.walletBalance.lte(0) ? 'no_balance'
@@ -162,6 +165,15 @@ export class CallEngine {
       : !campaign.active ? 'campaign_paused'
       : blocked ? 'blocked_caller'
       : null;
+
+    // --- Spam protection: platform blocklist, hidden IDs, prefixes, caller rate, STIR/SHAKEN, spam score ---
+    if (!reason && campaign) {
+      const verdict = await this.spam.screen({ tenantId: tenant.id, campaign, callId: call.id, from: ev.from, attestation: ev.attestation, at: ev.at });
+      reason = verdict.reason;
+      if (verdict.score !== undefined || verdict.lineType !== undefined) {
+        await prisma.call.update({ where: { id: call.id }, data: { spamScore: verdict.score ?? null, lineType: verdict.lineType ?? null } });
+      }
+    }
     if (reason) {
       await prisma.call.update({ where: { id: call.id }, data: { status: CallStatus.REJECTED, rejectReason: reason, endedAt: ev.at } });
       await cc.reject(ev.callControlId).catch((e) => this.log.warn(`reject failed: ${e.message}`));
@@ -468,6 +480,7 @@ export class CallEngine {
       }
     });
     if (cost.gt(0)) await this.notifications.checkLowBalance(call.tenantId);
+    await this.spam.afterCall({ tenantId: call.tenantId, campaign: call.campaign, callerNumber: call.callerNumber, durationSec, converted }).catch((e) => this.log.warn(`auto-block: ${(e as Error).message}`));
 
     if (payout.gt(0) && call.publisher?.postbackUrl) {
       const url = fillMacros(call.publisher.postbackUrl, {
