@@ -1,0 +1,534 @@
+// ViaRoute database schema
+// Golden rule: every business table carries tenantId, and every query filters by it.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Platform level (owned by Super Admin)
+// ---------------------------------------------------------------------------
+
+model Plan {
+  id              String   @id @default(uuid()) @db.Uuid
+  code            String   @unique // starter | pro | enterprise
+  name            String
+  monthlyPrice    Decimal  @db.Decimal(10, 2)
+  perMinuteRate   Decimal  @db.Decimal(10, 4)
+  includedNumbers Int
+  maxUsers        Int?     // null = unlimited
+  whiteLabel      Boolean  @default(false)
+  customDomain    Boolean  @default(false)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  tenants Tenant[]
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+model Tenant {
+  id            String       @id @default(uuid()) @db.Uuid
+  name          String
+  subdomain     String       @unique
+  customDomain  String?      @unique
+  customDomainVerifiedAt DateTime?
+  branding      Json?        // { logoUrl, primaryColor, portalName }
+  status        TenantStatus @default(TRIAL)
+  walletBalance Decimal      @default(0) @db.Decimal(12, 4)
+  lowBalanceThreshold  Decimal   @default(10) @db.Decimal(10, 2)
+  lowBalanceNotifiedAt DateTime? // set when the alert is sent; cleared on top-up
+  timezone      String       @default("America/New_York")
+  planId        String?      @db.Uuid
+  plan          Plan?        @relation(fields: [planId], references: [id])
+  trialEndsAt   DateTime?
+  billingRenewsAt DateTime?  // next subscription charge from the wallet
+  suspendReason String?      // set when the platform admin suspends (shown to the customer); null = billing suspension
+  closedAt      DateTime?
+
+  // Custom deal: overrides the plan for this customer (null = use the plan / platform price).
+  perMinuteRate       Decimal? @db.Decimal(10, 4)
+  numberPriceLocal    Decimal? @db.Decimal(10, 2)
+  numberPriceTollFree Decimal? @db.Decimal(10, 2)
+  includedNumbers     Int?
+
+  // Safety limits (null = no limit).
+  maxConcurrentCalls Int?
+  maxNumbers         Int?
+
+  /** Carrier for this customer's new numbers (null = the platform default). */
+  providerId String?   @db.Uuid
+  provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  users          User[]
+  campaigns      Campaign[]
+  phoneNumbers   PhoneNumber[]
+  publishers     Publisher[]
+  buyers         Buyer[]
+  targets        Target[]
+  calls          Call[]
+  transactions   Transaction[]
+  auditLogs      AuditLog[]
+  blockedNumbers BlockedNumber[]
+  notifications  Notification[]
+  notes          TenantNote[]
+}
+
+// ---------------------------------------------------------------------------
+// Users & auth
+// ---------------------------------------------------------------------------
+
+enum Role {
+  SUPER_ADMIN // platform owner (tenantId = null)
+  TENANT_ADMIN
+  MANAGER
+  PUBLISHER
+  BUYER
+}
+
+model User {
+  id            String    @id @default(uuid()) @db.Uuid
+  tenantId      String?   @db.Uuid // null only for SUPER_ADMIN
+  tenant        Tenant?   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email         String
+  passwordHash  String?   // null = invited, hasn't set a password yet
+  name          String
+  role          Role
+  emailVerified Boolean   @default(false)
+  twofaSecret   String?   // AES-GCM encrypted
+  twofaEnabled  Boolean   @default(false)
+  tokenVersion  Int       @default(0) // bump to log out every session
+  invitedById   String?   @db.Uuid
+  publisherId   String?   @db.Uuid // set when role = PUBLISHER
+  buyerId       String?   @db.Uuid // set when role = BUYER
+  timezone      String?   // personal default for dates and reports; null = the portal's timezone
+  lastLoginAt   DateTime?
+  disabledAt    DateTime? // login blocked by an admin
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  authTokens AuthToken[]
+
+  @@unique([tenantId, email])
+  @@index([email])
+}
+
+enum AuthTokenType {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+  INVITE
+}
+
+/// One-time links sent by email. Only the SHA-256 hash of the token is stored.
+model AuthToken {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String        @db.Uuid
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      AuthTokenType
+  tokenHash String        @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime      @default(now())
+
+  @@index([userId, type])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String?  @db.Uuid
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?  @db.Uuid
+  action    String   // e.g. "campaign.update"
+  entity    String?
+  entityId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Campaigns, publishers, buyers, routing
+// ---------------------------------------------------------------------------
+
+/** Where a caller who already called this campaign (inside the duplicate window) is sent. */
+enum RepeatRouting {
+  DIFFERENT // a buyer/target that hasn't had this caller yet, when one is available
+  SAME      // the buyer/target that took their last call, when available
+  NORMAL    // ignore history and route as usual
+}
+
+model Campaign {
+  id                  String   @id @default(uuid()) @db.Uuid
+  tenantId            String   @db.Uuid
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                String
+  active              Boolean  @default(true)
+  convertAfterSeconds Int      @default(90)
+  payout              Decimal  @default(0) @db.Decimal(10, 2) // paid to publisher
+  revenue             Decimal  @default(0) @db.Decimal(10, 2) // charged to buyer
+  recordCalls         Boolean  @default(true)
+  duplicateWindowSec  Int      @default(86400) // repeat callers inside this window are not paid
+  fallbackNumber      String?  // used when no buyer can take the call
+  repeatRouting       RepeatRouting @default(DIFFERENT) // where repeat callers are sent
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  phoneNumbers PhoneNumber[]
+  routes       Route[]
+  calls        Call[]
+
+  @@index([tenantId])
+}
+
+model Publisher {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name           String
+  email          String?
+  payoutOverride Decimal? @db.Decimal(10, 2)
+  /// Fired on every converted call. Macros: {call_id} {caller} {duration} {payout} {campaign} {publisher}
+  postbackUrl    String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  phoneNumbers PhoneNumber[]
+  calls        Call[]
+
+  @@index([tenantId])
+}
+
+model BlockedNumber {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  e164      String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, e164])
+}
+
+enum DestinationType {
+  PHONE
+  SIP
+}
+
+model Buyer {
+  id              String          @id @default(uuid()) @db.Uuid
+  tenantId        String          @db.Uuid
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String
+  destinationType DestinationType @default(PHONE)
+  destination     String          // E.164 number or SIP URI
+  email           String?
+  ringTimeoutSec  Int             @default(20) // then try the next buyer
+  // Buyer-wide caps: count every call to this buyer (main line and all its targets), across campaigns. null = off.
+  concurrencyCap  Int?
+  hourlyCap       Int?
+  dailyCap        Int?
+  monthlyCap      Int?
+  active          Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+
+  routes  Route[]
+  calls   Call[]
+  targets Target[]
+
+  @@index([tenantId])
+}
+
+/**
+ * A place calls are sent: a phone number or SIP address.
+ * Belongs to a buyer (e.g. one of their call centers), or has no buyer = a direct target (your own agents).
+ */
+model Target {
+  id              String          @id @default(uuid()) @db.Uuid
+  tenantId        String          @db.Uuid
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  buyerId         String?         @db.Uuid
+  buyer           Buyer?          @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  name            String
+  destinationType DestinationType @default(PHONE)
+  destination     String          // E.164 number or SIP URI
+  ringTimeoutSec  Int             @default(20) // then try the next one
+  priority        Int             @default(1)  // default priority when added to a campaign (1 = first)
+  // Target-wide caps, shared by every campaign. null = off.
+  concurrencyCap  Int?            // lines: live calls at once
+  hourlyCap       Int?
+  dailyCap        Int?
+  monthlyCap      Int?
+  active          Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+
+  routes Route[]
+  calls  Call[]
+
+  @@index([tenantId])
+}
+
+model Route {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+  campaignId     String   @db.Uuid
+  campaign       Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  buyerId        String?  @db.Uuid // buyer's main line, or the target's buyer
+  buyer          Buyer?   @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  targetId       String?  @db.Uuid // set = dial this target instead of the buyer's main line
+  target         Target?  @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  priority       Int      @default(1) // lower = tried first
+  weight         Int      @default(100)
+  hourlyCap      Int?
+  dailyCap       Int?
+  monthlyCap     Int?
+  concurrencyCap Int?
+  schedule       Json?    // { mon: [["09:00","17:00"]], ... } in the tenant's timezone; null = 24/7
+  geoRules       Json?    // { allowStates: ["CA","TX"] }; null = everywhere
+  revenueOverride Decimal? @db.Decimal(10, 2) // this buyer pays a different price than the campaign
+  active         Boolean  @default(true)
+
+  calls Call[]
+
+  @@index([tenantId])
+  @@index([campaignId])
+}
+
+enum NumberType {
+  LOCAL
+  TOLL_FREE
+}
+
+enum NumberStatus {
+  PENDING  // ordered, carrier still activating
+  ACTIVE
+  FAILED   // carrier rejected the order (wallet refunded)
+  RELEASED
+}
+
+model PhoneNumber {
+  id          String     @id @default(uuid()) @db.Uuid
+  tenantId    String     @db.Uuid
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  e164        String     // unique among active numbers (partial index in migration)
+  label       String?
+  type        NumberType   @default(LOCAL)
+  status      NumberStatus @default(PENDING)
+  provider    String       // "telnyx" | "mock" (carrier type)
+  providerId  String?      @db.Uuid // carrier account; null = legacy (from .env)
+  carrier     Provider?    @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  providerNumberId String? // carrier's id for the number (needed to release it)
+  providerOrderId  String?
+  campaignId  String?    @db.Uuid
+  campaign    Campaign?  @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  publisherId String?    @db.Uuid
+  publisher   Publisher? @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+  monthlyPrice Decimal   @default(0) @db.Decimal(10, 4) // what we charge the customer
+  carrierCost  Decimal   @default(0) @db.Decimal(10, 4) // what the carrier charges us
+  purchasedAt DateTime   @default(now())
+  releasedAt  DateTime?
+
+  calls Call[]
+
+  @@index([tenantId, status])
+  @@index([e164])
+}
+
+// ---------------------------------------------------------------------------
+// Calls & postbacks
+// ---------------------------------------------------------------------------
+
+enum CallStatus {
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  NO_ANSWER
+  REJECTED
+  FAILED
+}
+
+model Call {
+  id             String       @id @default(uuid()) @db.Uuid
+  tenantId       String       @db.Uuid
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  campaignId     String?      @db.Uuid
+  campaign       Campaign?    @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  phoneNumberId  String?      @db.Uuid
+  phoneNumber    PhoneNumber? @relation(fields: [phoneNumberId], references: [id], onDelete: SetNull)
+  publisherId    String?      @db.Uuid
+  publisher      Publisher?   @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+  buyerId        String?      @db.Uuid
+  buyer          Buyer?       @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+  routeId        String?      @db.Uuid
+  route          Route?       @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  targetId       String?      @db.Uuid
+  target         Target?      @relation(fields: [targetId], references: [id], onDelete: SetNull)
+  telnyxCallId   String?      @unique // inbound leg (call_control_id)
+  outboundCallId String?      // current/last leg to a buyer
+  provider       String       @default("telnyx") // "telnyx" | "simulator"
+  providerId     String?      @db.Uuid
+  carrier        Provider?    @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  carrierCost    Decimal      @default(0) @db.Decimal(10, 4) // what the carrier charged us for this call
+  callerNumber   String
+  callerState    String?
+  dialedNumber   String?
+  status         CallStatus   @default(RINGING)
+  rejectReason   String?
+  duplicate      Boolean      @default(false)
+  attempts       Int          @default(0) // buyers tried
+  durationSec    Int          @default(0) // whole inbound call
+  connectedSec   Int          @default(0) // talk time with the buyer (used for conversion)
+  converted      Boolean      @default(false)
+  revenue        Decimal      @default(0) @db.Decimal(10, 2)
+  payout         Decimal      @default(0) @db.Decimal(10, 2)
+  cost           Decimal      @default(0) @db.Decimal(10, 4) // usage charged to the tenant
+  hangupCause    String?
+  recordingUrl   String?
+  startedAt      DateTime     @default(now())
+  answeredAt     DateTime?    // buyer picked up
+  endedAt        DateTime?
+
+  postbacks Postback[]
+
+  @@index([tenantId, startedAt])
+  @@index([tenantId, campaignId])
+  @@index([tenantId, status])
+  @@index([callerNumber])
+  @@index([tenantId, callerNumber, startedAt])
+  @@index([providerId, startedAt])
+}
+
+model Postback {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  callId     String   @db.Uuid
+  call       Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  url        String
+  statusCode Int?
+  attempts   Int      @default(0)
+  lastError  String?
+  succeededAt DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (in-app bell)
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @db.Uuid
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type      String    // low_balance | cap_reached | payment | suspended | number ...
+  title     String
+  body      String?
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Billing
+// ---------------------------------------------------------------------------
+
+enum TransactionType {
+  TOPUP
+  SUBSCRIPTION
+  CALL_USAGE
+  NUMBER_RENTAL
+  RECORDING
+  ADJUSTMENT
+  REFUND
+}
+
+model Transaction {
+  id          String          @id @default(uuid()) @db.Uuid
+  tenantId    String          @db.Uuid
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  type        TransactionType
+  amount      Decimal         @db.Decimal(12, 4) // + credit, - debit
+  balanceAfter Decimal        @db.Decimal(12, 4)
+  description String?
+  stripeRef   String?         @unique // makes Stripe top-ups idempotent
+  callId      String?         @db.Uuid
+  refundOfId  String?         @unique @db.Uuid // a refund points at the charge it gives back (once)
+  createdAt   DateTime        @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+/** Internal notes about a customer, for the platform team only. */
+model TenantNote {
+  id         String   @id @default(uuid()) @db.Uuid
+  tenantId   String   @db.Uuid
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  authorId   String?  @db.Uuid
+  authorName String
+  body       String
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}
+
+enum ProviderType {
+  TELNYX
+  CUSTOM // any carrier or softswitch speaking the ViaRoute Carrier API (docs/CARRIER_API.md)
+  TWILIO
+  SIGNALWIRE
+  PLIVO
+  BANDWIDTH
+  VONAGE
+  TEST // built-in simulator: numbers are fake, calls are simulated
+}
+
+enum ProviderStatus {
+  ACTIVE   // new numbers and calls
+  DRAINING // existing numbers keep working; no new numbers
+  DISABLED // off: calls to its numbers are refused
+}
+
+/** A carrier account (Telnyx, â€¦) the platform buys numbers and places calls through. */
+model Provider {
+  id          String         @id @default(uuid()) @db.Uuid
+  name        String
+  type        ProviderType
+  status      ProviderStatus @default(ACTIVE)
+  isDefault   Boolean        @default(false)
+  /** Encrypted JSON: { apiKey, publicKey, connectionId }. Never returned by the API. */
+  credentials String?
+  /** e.g. "KEYâ€¦a1b2", to recognise which key is stored. */
+  credentialHint String?
+
+  // What the carrier charges us (USD).
+  inboundPerMinute      Decimal @default(0) @db.Decimal(10, 4)
+  outboundPerMinute     Decimal @default(0) @db.Decimal(10, 4)
+  numberLocalMonthly    Decimal @default(0) @db.Decimal(10, 4)
+  numberTollFreeMonthly Decimal @default(0) @db.Decimal(10, 4)
+
+  lastWebhookAt DateTime?
+  lastErrorAt   DateTime?
+  lastError     String?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  numbers PhoneNumber[]
+  calls   Call[]
+  tenants Tenant[]
+}

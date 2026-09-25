@@ -1,0 +1,16 @@
+{
+  "name": "viaroute",
+  "private": true,
+  "packageManager": "pnpm@10.28.2",
+  "scripts": {
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "db:generate": "pnpm --filter @viaroute/db generate",
+    "db:migrate": "pnpm --filter @viaroute/db migrate",
+    "db:seed": "pnpm --filter @viaroute/db seed",
+    "db:studio": "pnpm --filter @viaroute/db studio",
+    "dev": "pnpm --parallel --filter @viaroute/api --filter @viaroute/web dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test"
+  }
+}

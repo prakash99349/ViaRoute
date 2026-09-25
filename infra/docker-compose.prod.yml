@@ -1,0 +1,107 @@
+# ViaRoute production stack (single server).
+#
+#   cd /opt/viaroute && docker compose -f infra/docker-compose.prod.yml --env-file .env.production up -d
+#
+# Uses a managed PostgreSQL by default (DATABASE_URL). For an all-in-one server add
+# `--profile local-db` to also run Postgres here, with daily backups.
+
+name: viaroute
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      ROOT_DOMAIN: ${ROOT_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+      - web
+
+  api:
+    image: ${REGISTRY:-ghcr.io/your-org}/viaroute-api:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    env_file: ../.env.production
+    environment:
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      STORAGE_DIR: /app/storage
+    volumes:
+      - recordings:/app/storage
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  web:
+    image: ${REGISTRY:-ghcr.io/your-org}/viaroute-web:${TAG:-latest}
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://api.${ROOT_DOMAIN}
+        NEXT_PUBLIC_ROOT_DOMAIN: ${ROOT_DOMAIN}
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  # --- Optional: database on this server (profile "local-db") ---
+  postgres:
+    profiles: ["local-db"]
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: viaroute
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: viaroute
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U viaroute"]
+      interval: 5s
+      retries: 10
+
+  backup:
+    profiles: ["local-db"]
+    image: prodrigestivill/postgres-backup-local:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: viaroute
+      POSTGRES_USER: viaroute
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      SCHEDULE: "@daily"
+      BACKUP_KEEP_DAYS: 30
+      BACKUP_KEEP_WEEKS: 8
+      BACKUP_KEEP_MONTHS: 6
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  caddy_data:
+  caddy_config:
+  recordings:
+  redisdata:
+  pgdata:

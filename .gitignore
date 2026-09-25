@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.next/
+.env
+*.log
+coverage/
+.turbo/
+.env*.local
+storage/
+.env.production
+infra/backups/

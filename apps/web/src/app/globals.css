@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+/*
+ * ViaRoute theme — warm neutrals, ink primary actions, one data blue.
+ * Tenant branding overrides --brand (buttons, active states) per portal.
+ */
+:root {
+  --background: #f7f7f5;
+  --foreground: #16181d;
+  --card: #ffffff;
+  --subtle: #f4f4f1;      /* inputs, segmented controls, hover */
+  --border: #eaeae6;
+  --border-strong: #dcdcd6;
+  --muted: #5e636b;       /* secondary text (≥ 4.5:1 on white) */
+  --faint: #6e737b;       /* labels, captions */
+  --brand: #16181d;       /* primary buttons, active nav */
+  --brand-contrast: #ffffff;
+  --accent: #2f54c8;      /* links */
+  --success: #16794c;
+  --success-bg: #e9f6ee;
+  --warning: #b45309;
+  --warning-bg: #fef3e2;
+  --danger: #b42318;
+  --danger-bg: #fdecea;
+  /* Chart series */
+  --series-1: #3e63dd;
+  --series-1-soft: #c4d0f4;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --grid: #efefeb;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-subtle: var(--subtle);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-brand: var(--brand);
+  --color-brand-contrast: var(--brand-contrast);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-series-1: var(--series-1);
+  --color-series-1-soft: var(--series-1-soft);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f1012;
+    --foreground: #ececec;
+    --card: #17181b;
+    --subtle: #1f2024;
+    --border: #26282d;
+    --border-strong: #34363c;
+    --muted: #a3a7ae;
+    --faint: #8e9299;
+    --brand: #ececec;
+    --brand-contrast: #16181d;
+    --accent: #8aa6f5;
+    --success: #4cc38a;
+    --success-bg: #12291d;
+    --warning: #f0a44b;
+    --warning-bg: #2d200e;
+    --danger: #f2877b;
+    --danger-bg: #331613;
+    --series-1: #5b7ee8;
+    --series-1-soft: #2c3a66;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --grid: #232428;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.tabular { font-variant-numeric: tabular-nums; }

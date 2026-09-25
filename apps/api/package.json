@@ -1,0 +1,67 @@
+{
+  "name": "@viaroute/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "test": "jest --runInBand"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.2.6",
+    "@nestjs/core": "^11.2.6",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/mapped-types": "^2.1.1",
+    "@nestjs/platform-express": "^11.2.6",
+    "@nestjs/throttler": "^6.7.1",
+    "@prisma/client": "6.19.3",
+    "@viaroute/db": "workspace:*",
+    "bcryptjs": "^3.0.3",
+    "bullmq": "^6.3.8",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "dotenv": "^18.0.3",
+    "helmet": "^8.3.0",
+    "ioredis": "^6.0.0",
+    "nodemailer": "^10.0.10",
+    "otplib": "^12.0.1",
+    "prisma": "6.19.3",
+    "qrcode": "^1.5.4",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "stripe": "^22.6.2"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.24",
+    "@nestjs/testing": "^11.2.6",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^26.6.2",
+    "@types/nodemailer": "^8.0.2",
+    "@types/qrcode": "^1.5.6",
+    "@types/supertest": "^7.2.1",
+    "jest": "^29.7.0",
+    "supertest": "^7.3.0",
+    "ts-jest": "^29.4.13",
+    "typescript": "^5.9.3"
+  },
+  "jest": {
+    "rootDir": "test",
+    "testRegex": ".e2e-spec.ts$",
+    "transform": {
+      "^.+.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": "<rootDir>/tsconfig.json"
+        }
+      ]
+    },
+    "testEnvironment": "node",
+    "globalSetup": "<rootDir>/global-setup.ts",
+    "setupFiles": [
+      "<rootDir>/env.ts"
+    ],
+    "testTimeout": 30000
+  }
+}

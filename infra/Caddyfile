@@ -1,0 +1,40 @@
+# ViaRoute web server: automatic HTTPS for the main site, every customer subdomain,
+# and customers' own verified domains (on-demand TLS, approved by the API).
+{
+	email {$ACME_EMAIL}
+	on_demand_tls {
+		# Caddy asks the API before getting a certificate for any new hostname.
+		ask http://api:4000/internal/tls-check
+	}
+}
+
+(security) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+	encode zstd gzip
+}
+
+# API (webhooks from Telnyx/Stripe land here too).
+api.{$ROOT_DOMAIN} {
+	import security
+	reverse_proxy api:4000
+}
+
+# Main site, app., every tenant subdomain, and verified custom domains → the web portal.
+# `tls { on_demand }` issues certificates as hostnames are first visited.
+https:// {
+	import security
+	tls {
+		on_demand
+	}
+	reverse_proxy web:3000
+}
+
+# Plain HTTP → HTTPS.
+http:// {
+	redir https://{host}{uri} permanent
+}
