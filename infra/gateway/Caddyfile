@@ -1,0 +1,25 @@
+# Single-port gateway for platforms that proxy one port with their own HTTPS (xCloud, Coolify, …).
+#   /api/*   → API (prefix removed: /api/auth/login → /auth/login)
+#   /mail/*  → test inbox (Mailpit), password-protected
+#   anything else → web app (all portals, any host)
+{
+	auto_https off
+	admin off
+}
+
+:80 {
+	encode zstd gzip
+	header -Server
+
+	handle_path /api/* {
+		reverse_proxy api:4000
+	}
+
+	handle /mail* {
+		reverse_proxy mailpit:8025
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

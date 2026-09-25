@@ -27,6 +27,10 @@ async function allowedOrigin(origin: string): Promise<boolean> {
 
 /** Shared by the server and the tests so both run the exact same stack. */
 export function configureApp(app: NestExpressApplication) {
+  // Behind reverse proxies, use the visitor's IP (from X-Forwarded-For) for rate limits and logs,
+  // not the proxy's. Hops = proxies in front of the API: 1 behind our Caddy, 2 behind a PaaS + gateway.
+  const hops = Number(process.env.TRUST_PROXY_HOPS ?? (process.env.NODE_ENV === 'production' ? 1 : 0));
+  if (hops > 0) app.set('trust proxy', hops);
   app.use(helmet());
   app.useBodyParser('json', { limit: '1mb' }); // logo uploads
   app.enableCors({

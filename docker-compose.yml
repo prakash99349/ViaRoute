@@ -1,0 +1,111 @@
+# ViaRoute on a one-port platform (xCloud "Deploy via Git", Coolify, CapRover, …).
+# The platform gives the HTTPS domain and forwards it to port 8080 here; a small gateway serves:
+#   https://<APP_DOMAIN>/        web app        https://<APP_DOMAIN>/api/…  API (carrier webhooks too)
+#   https://<APP_DOMAIN>/mail/   test inbox (user "admin", password MAIL_UI_PASSWORD)
+#
+# Set these environment variables on the platform (see the list in DEPLOY.md → "xCloud"):
+#   APP_DOMAIN, ADMIN_EMAIL, ADMIN_PASSWORD, POSTGRES_PASSWORD, JWT_SECRET, ENCRYPTION_KEY, MAIL_UI_PASSWORD
+#
+# For your own server with automatic HTTPS for every customer subdomain and custom domain, use
+# infra/docker-compose.prod.yml instead.
+
+name: viaroute
+
+services:
+  gateway:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8080}:80"
+    volumes:
+      - ./infra/gateway/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - api
+      - web
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # The browser calls the API on the same address (…/api), so any portal host works.
+        NEXT_PUBLIC_API_URL: /api
+        NEXT_PUBLIC_ROOT_DOMAIN: ${APP_DOMAIN:?set APP_DOMAIN, e.g. mirthful-hill.1wp.site}
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      API_PORT: 4000
+      # Platform proxy + our gateway.
+      TRUST_PROXY_HOPS: 2
+      DATABASE_URL: postgresql://viaroute:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/viaroute?schema=public
+      REDIS_URL: redis://redis:6379
+      ROOT_DOMAIN: ${APP_DOMAIN}
+      WEB_ORIGIN: https://${APP_DOMAIN}
+      API_ORIGIN: https://${APP_DOMAIN}/api
+      CUSTOM_DOMAIN_TARGET: ${APP_DOMAIN}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+      # First admin, created on start-up if missing (change the password after logging in).
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD (12+ characters)}
+      # Email: the built-in test inbox unless you set a real SMTP server (e.g. Resend).
+      SMTP_URL: ${SMTP_URL:-smtp://mailpit:1025}
+      MAIL_FROM: ${MAIL_FROM:-ViaRoute <no-reply@viaroute.test>}
+      # Carriers are added in Admin → Carriers; until then the Test carrier simulates calls.
+      TELNYX_API_KEY: ${TELNYX_API_KEY:-}
+      SIMULATOR_ENABLED: ${SIMULATOR_ENABLED:-true}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      TRIAL_DAYS: ${TRIAL_DAYS:-14}
+      STORAGE_DIR: /app/storage
+    volumes:
+      - recordings:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: viaroute
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: viaroute
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U viaroute"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  # Test inbox for sign-up / invite / reset emails, at https://<APP_DOMAIN>/mail/
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    environment:
+      MP_WEBROOT: /mail/
+      MP_UI_AUTH: admin:${MAIL_UI_PASSWORD:?set MAIL_UI_PASSWORD}
+
+volumes:
+  pgdata:
+  redisdata:
+  recordings:

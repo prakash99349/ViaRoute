@@ -26,6 +26,35 @@ flowchart LR
 
 ---
 
+## 0a. xCloud / Coolify ("Deploy via Git", one port)
+
+The root `docker-compose.yml` runs everything behind one port (**8080**): web app, API at `/api`, test inbox at `/mail`.
+
+| Setting | Value |
+|---|---|
+| Deploy with | `docker-compose.yml` |
+| Docker Compose file | `docker-compose.yml` |
+| Port | `8080` |
+
+Environment variables:
+
+| Name | Value |
+|---|---|
+| `APP_DOMAIN` | the domain xCloud gives the app, e.g. `mirthful-hill.1wp.site` (no `https://`) |
+| `ADMIN_EMAIL` | your admin login |
+| `ADMIN_PASSWORD` | 12+ characters (change it after the first login) |
+| `POSTGRES_PASSWORD` | `openssl rand -hex 32` |
+| `JWT_SECRET` | `openssl rand -hex 48` |
+| `ENCRYPTION_KEY` | `openssl rand -hex 32` (exactly 64 characters) |
+| `MAIL_UI_PASSWORD` | password for the test inbox at `/mail/` (user `admin`) |
+
+Optional: `SMTP_URL` / `MAIL_FROM` for real email, `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`.
+Carrier webhook URLs (Admin → Carriers) come out as `https://<APP_DOMAIN>/api/webhooks/…`.
+
+**Limit:** customer portals live on subdomains (`acme.<APP_DOMAIN>`). They only work if the platform sends
+`*.<APP_DOMAIN>` to this app with a wildcard certificate; a single staging domain doesn't. For full
+multi-customer hosting use your own server with `infra/docker-compose.prod.yml` (section 4).
+
 ## 0. Quick trial on a server IP (no domain yet)
 
 Try the whole app on a fresh Ubuntu server before setting up a domain and HTTPS.
