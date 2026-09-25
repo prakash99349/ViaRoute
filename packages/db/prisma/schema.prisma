@@ -78,6 +78,7 @@ model Tenant {
   publishers     Publisher[]
   buyers         Buyer[]
   targets        Target[]
+  agents         Agent[]
   calls          Call[]
   transactions   Transaction[]
   auditLogs      AuditLog[]
@@ -96,6 +97,7 @@ enum Role {
   MANAGER
   PUBLISHER
   BUYER
+  AGENT // in-house agent: takes calls in the browser softphone (or a SIP phone); sees only their own calls
 }
 
 model User {
@@ -116,6 +118,7 @@ model User {
   timezone      String?   // personal default for dates and reports; null = the portal's timezone
   lastLoginAt   DateTime?
   disabledAt    DateTime? // login blocked by an admin
+  agent         Agent?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -241,6 +244,7 @@ model BlockedNumber {
 enum DestinationType {
   PHONE
   SIP
+  AGENT // an in-house agent's softphone / SIP phone (see Agent)
 }
 
 model Buyer {
@@ -292,6 +296,7 @@ model Target {
 
   routes Route[]
   calls  Call[]
+  agent  Agent?
 
   @@index([tenantId])
 }
@@ -568,4 +573,25 @@ model PlatformSetting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+/**
+ * An in-house agent who takes calls in the browser softphone or on a SIP phone.
+ * Routed like any target (priority, caps, hours) but only rings while the agent is Available.
+ */
+model Agent {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String   @unique @db.Uuid
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetId  String   @unique @db.Uuid
+  target    Target   @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  /** Carrier login for the softphone / SIP phone, encrypted JSON (e.g. Telnyx credential id, SIP username/password). */
+  sipCredentials String?
+  /** Carrier account the login was made on (re-provisioned if the customer changes carrier). */
+  providerId String?  @db.Uuid
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
 }

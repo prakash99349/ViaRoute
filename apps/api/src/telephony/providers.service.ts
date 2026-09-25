@@ -22,6 +22,11 @@ export interface Credentials {
   publicKey?: string;
   /** Telnyx Call Control application id that numbers and outbound calls use. */
   connectionId?: string;
+  /** Telnyx Credential Connection the agents' softphone / SIP phone logins are made on. */
+  sipConnectionId?: string;
+  /** Twilio API key used to sign browser softphone tokens. */
+  apiKeySid?: string;
+  apiKeySecret?: string;
   /** Custom carriers: API base URL, e.g. https://switch.example.com/viaroute/v1 */
   baseUrl?: string;
   /** Custom carriers: shared secret that signs their webhooks (HMAC-SHA256). */
@@ -118,8 +123,9 @@ export class ProvidersService {
   async forNewNumber(tenant: Pick<Tenant, 'providerId'>): Promise<Provider> {
     const rows = await this.all();
     const active = (p?: Provider | null) => (p && p.status === ProviderStatus.ACTIVE ? p : null);
-    const chosen =
-      active(rows.find((p) => p.id === tenant.providerId)) ?? active(rows.find((p) => p.isDefault)) ?? rows.find((p) => p.status === ProviderStatus.ACTIVE);
+    // The customer's own carrier may be newer than the cached list.
+    const pinned = tenant.providerId ? rows.find((p) => p.id === tenant.providerId) ?? (await this.byId(tenant.providerId)) : null;
+    const chosen = active(pinned) ?? active(rows.find((p) => p.isDefault)) ?? rows.find((p) => p.status === ProviderStatus.ACTIVE);
     if (!chosen) throw new Error('No active carrier. Turn one on under Admin → Carriers.');
     return chosen;
   }

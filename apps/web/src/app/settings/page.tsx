@@ -213,7 +213,7 @@ function SettingsContent() {
 
 export default function SettingsPage() {
   return (
-    <AppShell allow={['SUPER_ADMIN', 'TENANT_ADMIN', 'MANAGER', 'PUBLISHER', 'BUYER']}>
+    <AppShell allow={['SUPER_ADMIN', 'TENANT_ADMIN', 'MANAGER', 'PUBLISHER', 'BUYER', 'AGENT']}>
       <SettingsContent />
     </AppShell>
   );

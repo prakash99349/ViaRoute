@@ -78,4 +78,4 @@ export interface RecordingEvent {
 export const CALL_CONTROLS = Symbol('CALL_CONTROLS');
 export type CallControls = Record<ProviderName, CallControl>;
 /** The shared adapters; Telnyx adapters come from ProvidersService per carrier account. */
-export type SharedCallControls = Pick<CallControls, 'simulator'>;
+export type SharedCallControls = { simulator: CallControl & { agentAnswer(legId: string): void; agentEnd(legId: string, cause: string): void } };

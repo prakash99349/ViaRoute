@@ -20,6 +20,14 @@ class CredentialsDto {
   @IsOptional() @IsString() @MaxLength(200)
   connectionId?: string;
 
+  /** Telnyx: Credential Connection for agent softphones / SIP phones. */
+  @IsOptional() @IsString() @MaxLength(200)
+  sipConnectionId?: string;
+
+  /** Twilio: API key for browser softphone tokens. */
+  @IsOptional() @IsString() @MaxLength(100) apiKeySid?: string;
+  @IsOptional() @IsString() @MaxLength(200) apiKeySecret?: string;
+
   /** Custom carriers */
   @IsOptional() @IsString() @MaxLength(300)
   baseUrl?: string;
@@ -52,7 +60,7 @@ const REQUIRED: Partial<Record<ProviderType, [keyof CredentialsDto, string][]>> 
   VONAGE: [['applicationId', 'Application ID'], ['privateKey', 'Private key']],
 };
 /** Settings safe to show again; everything else in credentials is secret. */
-const PUBLIC_FIELDS = ['connectionId', 'baseUrl', 'accountSid', 'spaceUrl', 'projectId', 'authId', 'appId', 'accountId', 'username', 'applicationId'] as const;
+const PUBLIC_FIELDS = ['connectionId', 'sipConnectionId', 'apiKeySid', 'baseUrl', 'accountSid', 'spaceUrl', 'projectId', 'authId', 'appId', 'accountId', 'username', 'applicationId'] as const;
 
 class ProviderDto {
   @Trim() @IsString() @MinLength(2) @MaxLength(60)

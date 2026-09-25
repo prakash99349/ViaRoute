@@ -18,10 +18,10 @@ const TEAM_ROLES = [Role.TENANT_ADMIN, Role.MANAGER] as const;
 type TeamRole = (typeof TEAM_ROLES)[number];
 /** Partner logins: a publisher or buyer who sees only their own calls. Not counted in the user limit. */
 const PARTNER_ROLES: Role[] = [Role.PUBLISHER, Role.BUYER];
-const INVITE_ROLES = [...TEAM_ROLES, Role.PUBLISHER, Role.BUYER] as const;
+const INVITE_ROLES = [...TEAM_ROLES, Role.PUBLISHER, Role.BUYER, Role.AGENT] as const;
 type InviteRole = (typeof INVITE_ROLES)[number];
 const ROLE_NAME: Record<Role, string> = {
-  SUPER_ADMIN: 'a Super Admin', TENANT_ADMIN: 'an Admin', MANAGER: 'a Manager', PUBLISHER: 'a Publisher', BUYER: 'a Buyer',
+  SUPER_ADMIN: 'a Super Admin', TENANT_ADMIN: 'an Admin', MANAGER: 'a Manager', PUBLISHER: 'a Publisher', BUYER: 'a Buyer', AGENT: 'an Agent',
 };
 
 class InviteDto {

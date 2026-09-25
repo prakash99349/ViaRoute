@@ -18,6 +18,7 @@ export const TENANT_MODELS = [
   'Buyer',
   'Route',
   'Target',
+  'Agent',
   'PhoneNumber',
   'Call',
   'Postback',

@@ -837,6 +837,8 @@ flowchart LR
 
 **IVR & whisper ✅** — phone-menu builder per campaign (menus, collect digits, messages, route to chosen buyers/targets, retries/fallbacks) on every carrier, buyer whisper, IVR data on calls/CDR/postbacks, keys-to-press in test calls. 157 API tests passing.
 
+**Agents & softphone ✅** — Agent login role, agents as campaign targets that ring only while Available, browser softphone (Telnyx WebRTC / Twilio Voice audio; Test carrier without audio), SIP phone logins on Telnyx, Agents page. 162 API tests passing.
+
 **Next: see [IMPROVEMENTS.md](IMPROVEMENTS.md)** for the full improvement plan (admin customer management → provider management → hardening).
 
 **Still for later (v2 / pre-launch hardening):** RTB, number pooling (DNI) JS snippet, IVR builder, AI transcription/scoring, Stripe auto-recharge, recordings on Cloudflare R2, Sentry, Postgres Row-Level Security, 2FA backup codes

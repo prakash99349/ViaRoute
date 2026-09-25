@@ -8,6 +8,7 @@ import { Alert, Button, Field, Spinner } from '@/components/ui';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import type { LoginResult } from '@/lib/types';
+import { homeFor } from '@/lib/types';
 
 export default function LoginPage() {
   const { portal, user, finishLogin } = useAuth();
@@ -17,7 +18,7 @@ export default function LoginPage() {
   const [challengeToken, setChallengeToken] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) router.replace(user.role === 'SUPER_ADMIN' ? '/admin' : '/dashboard');
+    if (user) router.replace(homeFor(user.role));
   }, [user, router]);
 
   // Arriving from the main site with 2FA on: go straight to the code step.

@@ -11,6 +11,8 @@ export interface AuthUser {
   /** Set by AuthGuard for partner logins (not part of the token). */
   publisherId?: string | null;
   buyerId?: string | null;
+  /** Set by AuthGuard for in-house agents: their agent target. */
+  agentTargetId?: string | null;
   /** Personal default timezone (set by AuthGuard); null = the portal's. */
   timezone?: string | null;
   /** Support session: id and name of the super admin viewing this account. */

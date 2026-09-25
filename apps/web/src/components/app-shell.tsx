@@ -4,14 +4,15 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import {
-  Briefcase, Crown, CreditCard, Crosshair, FileSpreadsheet, Hash, LayoutDashboard, LifeBuoy, LogOut, Megaphone, Menu, Network, PauseCircle, Phone, Plus, Radio, Search,
+  Briefcase, Crown, Headphones, CreditCard, Crosshair, FileSpreadsheet, Hash, LayoutDashboard, LifeBuoy, LogOut, Megaphone, Menu, Network, PauseCircle, Phone, Plus, Radio, Search,
   Settings, ShieldAlert, Tag, Target, Users, Wallet, X, type LucideIcon,
 } from 'lucide-react';
 import { api, money } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import type { Role } from '@/lib/types';
+import { homeFor, type Role } from '@/lib/types';
 import { useDocumentBrand, ViaRouteMark } from './brand';
 import { EmailBanner } from './email-banner';
+import { Softphone } from './softphone';
 import { NotificationBell } from './notification-bell';
 import { IconButton, Spinner } from './ui';
 
@@ -22,6 +23,8 @@ interface NavItem {
   /** Only these roles see the item (default: everyone). */
   roles?: Role[];
   badge?: 'live';
+  /** Also shown to in-house agents (who otherwise see only their softphone). */
+  agent?: boolean;
 }
 
 interface NavGroup {
@@ -34,9 +37,10 @@ const STAFF: Role[] = ['TENANT_ADMIN', 'MANAGER'];
 const TENANT_NAV: NavGroup[] = [
   {
     items: [
+      { href: '/softphone', label: 'Softphone', icon: Headphones, roles: ['AGENT'] },
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/live', label: 'Live calls', icon: Radio, badge: 'live' },
-      { href: '/calls', label: 'Call logs', icon: Phone },
+      { href: '/calls', label: 'Call logs', icon: Phone, agent: true },
       { href: '/reports', label: 'Reports', icon: FileSpreadsheet },
     ],
   },
@@ -48,6 +52,7 @@ const TENANT_NAV: NavGroup[] = [
       { href: '/publishers', label: 'Publishers', icon: Megaphone, roles: STAFF },
       { href: '/buyers', label: 'Buyers', icon: Briefcase, roles: STAFF },
       { href: '/targets', label: 'Targets', icon: Crosshair, roles: STAFF },
+      { href: '/agents', label: 'Agents', icon: Headphones, roles: STAFF },
       { href: '/spam', label: 'Spam & blocking', icon: ShieldAlert, roles: STAFF },
     ],
   },
@@ -56,7 +61,7 @@ const TENANT_NAV: NavGroup[] = [
     items: [
       { href: '/billing', label: 'Billing', icon: CreditCard, roles: ['TENANT_ADMIN'] },
       { href: '/team', label: 'Team', icon: Users, roles: STAFF },
-      { href: '/settings', label: 'Settings', icon: Settings },
+      { href: '/settings', label: 'Settings', icon: Settings, agent: true },
     ],
   },
 ];
@@ -76,10 +81,17 @@ const ADMIN_NAV: NavGroup[] = [
 /** Bottom tabs on phones. */
 const MOBILE_TABS: NavItem[] = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
+  { href: '/softphone', label: 'Phone', icon: Headphones, roles: ['AGENT'] },
   { href: '/live', label: 'Live', icon: Radio },
-  { href: '/calls', label: 'Calls', icon: Phone },
+  { href: '/calls', label: 'Calls', icon: Phone, agent: true },
   { href: '/campaigns', label: 'Campaigns', icon: Target, roles: STAFF },
 ];
+
+/** Agents see only items marked for them; everyone else sees items without a role list or with their role. */
+function visible(i: NavItem, role: Role) {
+  if (role === 'AGENT') return !!i.agent || !!i.roles?.includes('AGENT');
+  return !i.roles || i.roles.includes(role);
+}
 
 function isActive(path: string, href: string) {
   if (href === '/admin') return path === href || path.startsWith('/admin/customers/');
@@ -111,8 +123,9 @@ export function AppShell({ children, allow }: { children: ReactNode; allow: Role
   const staff = !!user && STAFF.includes(user.role);
 
   useEffect(() => {
-    if (!loading && !allowed) router.replace('/login');
-  }, [loading, allowed, router]);
+    // Signed in but not allowed here → their own home page (not the login page, which would send them back).
+    if (!loading && !allowed) router.replace(user ? homeFor(user.role) : '/login');
+  }, [loading, allowed, router, user]);
 
   // Plan + wallet for the sidebar, live-call count for the nav badge.
   useEffect(() => {
@@ -138,12 +151,12 @@ export function AppShell({ children, allow }: { children: ReactNode; allow: Role
   if (loading || !allowed) return <Spinner />;
 
   const groups = (isAdmin ? ADMIN_NAV : TENANT_NAV)
-    .map((g) => ({ ...g, items: g.items.filter((i) => !i.roles || i.roles.includes(user.role)) }))
+    .map((g) => ({ ...g, items: g.items.filter((i) => visible(i, user.role)) }))
     .filter((g) => g.items.length);
   const title = isAdmin ? 'ViaRoute' : portal?.branding?.portalName ?? portal?.name ?? 'Portal';
   const subtitle = isAdmin ? 'Platform admin' : tenant?.plan ? `${tenant.plan.name} plan` : user.role === 'PUBLISHER' ? 'Publisher' : user.role === 'BUYER' ? 'Buyer' : '';
   const brandStyle = portal?.branding?.primaryColor ? ({ '--brand': portal.branding.primaryColor, '--brand-contrast': '#ffffff' } as CSSProperties) : undefined;
-  const tabs = MOBILE_TABS.filter((t) => !isAdmin && (!t.roles || t.roles.includes(user.role)));
+  const tabs = MOBILE_TABS.filter((t) => !isAdmin && visible(t, user.role));
 
   const logo = isAdmin ? (
     <ViaRouteMark size={32} />
@@ -289,6 +302,7 @@ export function AppShell({ children, allow }: { children: ReactNode; allow: Role
           {!user.emailVerified && !user.impersonatedBy && <EmailBanner />}
           {children}
         </main>
+        {(user.role === 'TENANT_ADMIN' || user.role === 'MANAGER' || user.role === 'AGENT') && <Softphone />}
       </div>
 
       {/* Phone bottom tabs */}

@@ -20,7 +20,7 @@ interface Member {
   lastLoginAt: string | null;
 }
 
-const ROLE_LABEL: Partial<Record<Role, string>> = { TENANT_ADMIN: 'Admin', MANAGER: 'Manager', PUBLISHER: 'Publisher', BUYER: 'Buyer' };
+const ROLE_LABEL: Partial<Record<Role, string>> = { TENANT_ADMIN: 'Admin', MANAGER: 'Manager', PUBLISHER: 'Publisher', BUYER: 'Buyer', AGENT: 'Agent' };
 const selectCls = 'h-9 rounded-lg border border-border-strong bg-card px-3 text-sm outline-none focus:border-foreground/40';
 
 function TeamContent() {
@@ -101,12 +101,13 @@ function TeamContent() {
               <select name="role" className={`w-full ${selectCls}`} defaultValue="MANAGER">
                 <option value="MANAGER">Manager</option>
                 <option value="TENANT_ADMIN">Admin</option>
+                <option value="AGENT">Agent (softphone only)</option>
               </select>
             </label>
             <Button type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send invite'}</Button>
           </form>
           <p className="mt-3 text-xs text-muted">
-            <b>Admin</b>: everything, including billing and team. <b>Manager</b>: campaigns, numbers and reports.
+            <b>Admin</b>: everything, including billing and team. <b>Manager</b>: campaigns, numbers and reports. <b>Agent</b>: takes calls in the softphone and sees only their own calls — add them under Agents.
           </p>
         </Card>
       )}

@@ -7,6 +7,8 @@ import { CALL_CONTROLS, type CallControls } from './call-control.types';
 import { CallEngine } from './call-engine.service';
 import { SettingsService } from '../common/settings.service';
 import { CapsService } from './caps.service';
+import { AgentsController, AgentMeController } from './agents.controller';
+import { AgentsService } from './agents.service';
 import { SpamController } from './spam.controller';
 import { SpamService } from './spam.service';
 import { PostbackService } from './postback.service';
@@ -37,13 +39,14 @@ class FilesController {
 
 @Global()
 @Module({
-  controllers: [TelnyxWebhookController, CarrierWebhookController, VoiceWebhookController, SimulatorController, SpamController, FilesController],
+  controllers: [TelnyxWebhookController, CarrierWebhookController, VoiceWebhookController, SimulatorController, SpamController, AgentsController, AgentMeController, FilesController],
   providers: [
     StorageService,
     CapsService,
     PostbackService,
     SettingsService,
     SpamService,
+    AgentsService,
     SimulatorCallControl,
     CallEngine,
     {
@@ -53,6 +56,6 @@ class FilesController {
       useFactory: (simulator: SimulatorCallControl): Pick<CallControls, 'simulator'> => ({ simulator }),
     },
   ],
-  exports: [StorageService, CapsService, PostbackService, CallEngine, SimulatorCallControl, SettingsService, SpamService],
+  exports: [StorageService, CapsService, PostbackService, CallEngine, SimulatorCallControl, SettingsService, SpamService, AgentsService],
 })
 export class RoutingModule {}

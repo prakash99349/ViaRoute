@@ -86,6 +86,8 @@ const FIELDS: Record<MarkupType, CredField[]> = {
   TWILIO: [
     { key: 'accountSid', label: 'Account SID', placeholder: 'AC…', hint: 'Twilio Console → Account info.' },
     { key: 'authToken', label: 'Auth Token', secret: true },
+    { key: 'apiKeySid', label: 'API key SID', optional: true, placeholder: 'SK…', hint: 'For agents’ browser softphone (Console → API keys).' },
+    { key: 'apiKeySecret', label: 'API key secret', secret: true, optional: true },
   ],
   SIGNALWIRE: [
     { key: 'spaceUrl', label: 'Space URL', placeholder: 'yourspace.signalwire.com' },
@@ -181,7 +183,7 @@ function CarrierForm({ initial, onDone }: { initial?: Carrier; onDone: (changed:
       name: str('name'),
       ...(editing ? {} : { type }),
       status: f.get('status') ?? undefined,
-      ...(type === 'TELNYX' ? { credentials: { apiKey: str('apiKey'), publicKey: str('publicKey'), connectionId: str('connectionId') } } : {}),
+      ...(type === 'TELNYX' ? { credentials: { apiKey: str('apiKey'), publicKey: str('publicKey'), connectionId: str('connectionId'), sipConnectionId: str('sipConnectionId') } } : {}),
       ...(type === 'CUSTOM' ? { credentials: { apiKey: str('apiKey'), baseUrl: str('baseUrl'), numbersApi } } : {}),
       ...(isMarkup(type) ? { credentials: Object.fromEntries(FIELDS[type].map((f) => [f.key, str(f.key)])) } : {}),
       inboundPerMinute: Number(f.get('inboundPerMinute') || 0),
@@ -250,6 +252,7 @@ function CarrierForm({ initial, onDone }: { initial?: Carrier; onDone: (changed:
             <Field label="Public key (webhook signing)" name="publicKey" type="password" autoComplete="off" placeholder={secret(initial?.hasPublicKey, 'Base64 public key')} hint="Keys & Credentials → Public Key. Needed to trust webhooks." />
             <Field label="Call Control app ID" name="connectionId" defaultValue={initial?.connectionId ?? ''} placeholder="e.g. 1293384261075731499" hint="Voice → Programmable Voice → your app." />
           </div>
+          <Field label="SIP credential connection ID (optional)" name="sipConnectionId" defaultValue={initial?.settings?.sipConnectionId ?? ''} placeholder="For agent softphones and SIP phones" hint="Voice → SIP Trunking → a Credential connection. Agents’ browser softphone and SIP phone logins are created on it." />
         </fieldset>
       )}
 

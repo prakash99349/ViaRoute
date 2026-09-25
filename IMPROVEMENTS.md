@@ -204,6 +204,10 @@ These came out of going through the code, not just the feature list.
 
 > Phone-menu builder per campaign (menus, collect digits, messages; route to all or chosen buyers/targets, go to step, hang up; retries and fallbacks), keypad input on Telnyx, Custom API, Twilio, SignalWire, Plivo, Bandwidth, Vonage and the simulator, buyer whisper with placeholders, IVR choices/entries on calls, CDR and postbacks (`{ivr_path}`, `{ivr_<field>}`).
 
+## 🎧 VoIP: agents & softphone ✅ Done
+
+> In-house **agents** (new Agent login role: softphone + own calls only) are targets on campaigns and ring only while **Available**. Browser **softphone** with ring/answer/decline/mute/hang up, caller + campaign + IVR info; audio via Telnyx WebRTC and Twilio Voice SDKs; full flow without audio on the Test carrier. **SIP phones** (Zoiper, desk phones) on Telnyx via per-agent SIP logins. Not possible here: hosting our own SIP trunk (needs a media server).
+
 ## 🅵 Phase F — Growth features (v2)
 
 | Feature | Value |

@@ -8,6 +8,7 @@ import { DEFAULT_PER_MINUTE } from '../config';
 import { StorageService } from '../common/storage.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { stateForNumber } from './area-codes';
+import { AgentsService } from './agents.service';
 import { fillWhisper, IVR_MAX_STEPS, type IvrAction, type IvrFlow } from './ivr';
 import { SpamService } from './spam.service';
 import { CALL_CONTROLS, type CallControl, type GatherEvent, type SharedCallControls, type HangupEvent, type InboundEvent, type LegEvent, type ProviderName, type RecordingEvent } from './call-control.types';
@@ -32,6 +33,8 @@ interface Candidate {
   targetLimits: CapLimits | null;
   ownerName: string | null;
   buyerLimits: CapLimits | null;
+  /** Set when this target is an in-house agent's softphone. */
+  agentTargetId?: string;
 }
 
 const limitsOf = (x: { concurrencyCap: number | null; hourlyCap: number | null; dailyCap: number | null; monthlyCap: number | null }): CapLimits => ({
@@ -87,6 +90,8 @@ interface CallState {
   bridged: boolean;
   answeredAt?: string;
   connectedEndedAt?: string;
+  /** The agent target being rung / talking (for their softphone). */
+  agentTargetId?: string;
   /** For the buyer whisper. */
   campaignName?: string;
   callerNumber?: string;
@@ -116,6 +121,7 @@ export class CallEngine {
     @Inject(CALL_CONTROLS) private controls: SharedCallControls,
     private providers: ProvidersService,
     private spam: SpamService,
+    private agents: AgentsService,
     @Inject(REDIS) private redis: Redis,
     private caps: CapsService,
     private wallet: WalletService,
@@ -136,7 +142,7 @@ export class CallEngine {
       where: { e164: ev.to, status: NumberStatus.ACTIVE },
       include: {
         tenant: { include: { plan: true } },
-        campaign: { include: { routes: { where: { active: true }, include: { buyer: true, target: { include: { buyer: true } } } } } },
+        campaign: { include: { routes: { where: { active: true }, include: { buyer: true, target: { include: { buyer: true, agent: true } } } } } },
       },
     });
     const carrier = await this.providers.byId(number?.providerId ?? viaProviderId);
@@ -232,14 +238,25 @@ export class CallEngine {
       if (owner && !owner.active) return false;
       return isOpen(r.schedule as Schedule | null, ev.at, tenant.timezone) && geoAllows(r.geoRules as GeoRules | null, callerState);
     });
-    const ordered: Candidate[] = orderByPriorityAndWeight(eligible).map((r) => {
+    // Agents ring only while Available, on a carrier that can reach their softphone.
+    const agentRoutes = eligible.filter((r) => r.target?.destinationType === 'AGENT' && r.target.agent);
+    const online = await this.agents.available(agentRoutes.map((r) => r.target!.id));
+    const agentAddress = new Map<string, string>();
+    for (const r of agentRoutes) {
+      if (!online.has(r.target!.id)) continue;
+      const address = await this.agents.addressFor(r.target!.agent!, provider, carrier);
+      if (address) agentAddress.set(r.target!.id, address);
+    }
+    const reachable = eligible.filter((r) => r.target?.destinationType !== 'AGENT' || agentAddress.has(r.target.id));
+    const ordered: Candidate[] = orderByPriorityAndWeight(reachable).map((r) => {
       const owner = r.target ? r.target.buyer : r.buyer;
       return {
         routeId: r.id,
         buyerId: owner?.id ?? null,
         targetId: r.targetId,
         buyerName: r.target ? (owner ? `${owner.name} · ${r.target.name}` : r.target.name) : r.buyer!.name,
-        destination: r.target?.destination ?? r.buyer!.destination,
+        destination: (r.target && agentAddress.get(r.target.id)) ?? r.target?.destination ?? r.buyer!.destination,
+        agentTargetId: r.target?.destinationType === 'AGENT' ? r.target.id : undefined,
         ringTimeoutSec: r.target?.ringTimeoutSec ?? r.buyer!.ringTimeoutSec,
         limits: limitsOf(r),
         targetName: r.target?.name ?? null,
@@ -329,6 +346,23 @@ export class CallEngine {
     });
   }
 
+  /** Softphone buttons for an agent's leg. Simulated calls are driven here; real ones also accept hang up. */
+  async agentAction(legId: string, action: 'answer' | 'decline' | 'hangup'): Promise<boolean> {
+    const callId = await this.redis.get(legKey(legId));
+    const raw = callId ? await this.redis.get(stateKey(callId)) : null;
+    if (!raw) return false;
+    const s = JSON.parse(raw) as CallState;
+    if (s.outboundId !== legId) return false;
+    if (s.provider === 'simulator') {
+      if (action === 'answer') this.controls.simulator.agentAnswer(legId);
+      else this.controls.simulator.agentEnd(legId, action === 'decline' ? 'busy' : 'normal_clearing');
+      return true;
+    }
+    if (action === 'answer') return false; // real calls are answered in the carrier's SDK
+    await (await this.cc(s)).hangup(legId);
+    return true;
+  }
+
   /** Is this carrier leg the caller or a buyer? (Markup carriers need it to answer webhooks.) */
   async legRole(callControlId: string): Promise<'caller' | 'buyer' | null> {
     const callId = await this.redis.get(legKey(callControlId));
@@ -361,6 +395,7 @@ export class CallEngine {
     s.answeredAt = at.toISOString();
     s.phase = 'connected';
     await this.save(s);
+    if (s.agentTargetId) await this.agents.markActive(s.agentTargetId, s.outboundId);
     if (s.recordCalls) await cc.recordStart(s.inboundId).catch((e) => this.log.warn(`record_start: ${e.message}`));
     await prisma.call.update({ where: { id: s.callId }, data: { status: CallStatus.IN_PROGRESS, answeredAt: at } });
   }
@@ -500,6 +535,20 @@ export class CallEngine {
       }
       s.currentRouteId = c.routeId;
       s.reservedScopes = taken;
+      s.agentTargetId = c.agentTargetId;
+      if (c.agentTargetId) {
+        await this.agents.trackLeg(c.agentTargetId, {
+          legId: s.outboundId,
+          callId: s.callId,
+          caller: s.callerNumber ?? '',
+          callerState: s.callerState ?? null,
+          campaign: s.campaignName ?? null,
+          ivrPath: s.ivr?.path.join(' > ') || null,
+          state: 'ringing',
+          since: new Date().toISOString(),
+          simulated: s.provider === 'simulator',
+        });
+      }
       s.reservedAt = now.toISOString();
       await this.redis.set(legKey(s.outboundId), s.callId, 'EX', STATE_TTL);
       await this.save(s);
@@ -538,6 +587,7 @@ export class CallEngine {
   }
 
   private async releaseReservation(s: CallState) {
+    if (s.agentTargetId && s.outboundId) await this.agents.dropLeg(s.agentTargetId, s.outboundId);
     if (s.currentRouteId && s.reservedAt && !s.usingFallback) {
       for (const k of scopesOf(s)) await this.caps.releaseAll(k, s.timeZone, new Date(s.reservedAt));
     }
@@ -551,6 +601,7 @@ export class CallEngine {
     s.phase = 'ended';
     await this.save(s);
     if (s.accountLine) await this.caps.releaseConcurrency(accountScope(s.tenantId));
+    if (s.agentTargetId && s.outboundId) await this.agents.dropLeg(s.agentTargetId, s.outboundId);
     if (s.bridged && s.currentRouteId && !s.usingFallback) {
       for (const k of scopesOf(s)) await this.caps.releaseConcurrency(k);
     }

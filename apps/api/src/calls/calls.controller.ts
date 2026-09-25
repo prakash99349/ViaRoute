@@ -10,7 +10,7 @@ import type { AuthUser } from '../common/types';
 import { IsTimeZone, orNotFound } from '../common/validation';
 import { PostbackService } from '../routing/postback.service';
 
-const ALL_ROLES = [Role.TENANT_ADMIN, Role.MANAGER, Role.PUBLISHER, Role.BUYER];
+const ALL_ROLES = [Role.TENANT_ADMIN, Role.MANAGER, Role.PUBLISHER, Role.BUYER, Role.AGENT];
 const STAFF: Role[] = [Role.TENANT_ADMIN, Role.MANAGER];
 const CDR_LIMIT = 100_000;
 
@@ -91,6 +91,7 @@ class ExportDto extends CallFilterDto {
 function scope(user: AuthUser): Prisma.CallWhereInput {
   if (user.role === Role.PUBLISHER) return { publisherId: user.publisherId ?? '00000000-0000-0000-0000-000000000000' };
   if (user.role === Role.BUYER) return { buyerId: user.buyerId ?? '00000000-0000-0000-0000-000000000000' };
+  if (user.role === Role.AGENT) return { targetId: user.agentTargetId ?? '00000000-0000-0000-0000-000000000000' };
   return {};
 }
 
@@ -160,6 +161,7 @@ function present(c: CallRow, user: AuthUser) {
   };
   if (user.role === Role.PUBLISHER) return { ...base, payout: c.payout, buyer: null, target: null };
   if (user.role === Role.BUYER) return { ...base, revenue: c.revenue, publisher: null };
+  if (user.role === Role.AGENT) return { ...base, publisher: null };
   return { ...base, revenue: c.revenue, payout: c.payout, cost: c.cost, profit: c.revenue.sub(c.payout).sub(c.cost) };
 }
 

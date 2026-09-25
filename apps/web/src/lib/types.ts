@@ -1,4 +1,7 @@
-export type Role = 'SUPER_ADMIN' | 'TENANT_ADMIN' | 'MANAGER' | 'PUBLISHER' | 'BUYER';
+export type Role = 'SUPER_ADMIN' | 'TENANT_ADMIN' | 'MANAGER' | 'PUBLISHER' | 'BUYER' | 'AGENT';
+
+/** Where each role lands after signing in. */
+export const homeFor = (role: Role) => (role === 'SUPER_ADMIN' ? '/admin' : role === 'AGENT' ? '/softphone' : '/dashboard');
 export type TenantStatus = 'TRIAL' | 'ACTIVE' | 'SUSPENDED' | 'CLOSED';
 
 export interface User {

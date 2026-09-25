@@ -35,6 +35,8 @@ interface Session {
   clock: number;
   chain: Promise<void>;
   ended: Set<string>;
+  /** Agent legs answered from the softphone. */
+  agentAnswered: Set<string>;
   recording: boolean;
   talkSec: number;
 }
@@ -74,6 +76,7 @@ export class SimulatorCallControl implements CallControl {
       clock: Date.now() - estimate * 1000,
       chain: Promise.resolve(),
       ended: new Set(),
+      agentAnswered: new Set(),
       recording: false,
       talkSec: 0,
     };
@@ -102,6 +105,14 @@ export class SimulatorCallControl implements CallControl {
     const s = this.session(req.linkTo);
     const outId = `sim_out_${randomUUID()}`;
     this.sessions.set(outId, s);
+    // An agent's softphone: rings (in real time) until answered, declined or the ring time runs out.
+    if (req.to.startsWith('agent:')) {
+      s.attempt++;
+      setTimeout(() => {
+        if (!s.agentAnswered.has(outId) && !s.ended.has(outId)) void this.deliverHangup(outId, 'timeout', new Date());
+      }, req.timeoutSec * 1000).unref();
+      return outId;
+    }
     const outcome = s.scenario.outcomes[s.attempt++] ?? 'answer';
 
     if (outcome === 'answer') {
@@ -120,6 +131,19 @@ export class SimulatorCallControl implements CallControl {
   }
 
   async bridge() {}
+
+  /** The agent pressed Answer. The caller stays on until someone hangs up. */
+  agentAnswer(legId: string) {
+    const s = this.session(legId);
+    if (s.agentAnswered.has(legId) || s.ended.has(legId)) return;
+    s.agentAnswered.add(legId);
+    void this.engine.onAnswered({ callControlId: legId, at: new Date() });
+  }
+
+  /** The agent declined or hung up. */
+  agentEnd(legId: string, cause: string) {
+    void this.deliverHangup(legId, cause, new Date());
+  }
 
   async gather(id: string) {
     const s = this.session(id);

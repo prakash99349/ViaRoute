@@ -150,11 +150,11 @@ function CallsContent() {
                 <th>Caller</th>
                 <th>Campaign</th>
                 {user?.role !== 'PUBLISHER' && <th>Buyer</th>}
-                {user?.role !== 'BUYER' && <th>Publisher</th>}
+                {user?.role !== 'BUYER' && user?.role !== 'AGENT' && <th>Publisher</th>}
                 <th>Outcome</th>
                 <th className="text-right">Talk</th>
-                {user?.role !== 'PUBLISHER' && <th className="text-right">Revenue</th>}
-                {user?.role !== 'BUYER' && <th className="text-right">Payout</th>}
+                {user?.role !== 'PUBLISHER' && user?.role !== 'AGENT' && <th className="text-right">Revenue</th>}
+                {user?.role !== 'BUYER' && user?.role !== 'AGENT' && <th className="text-right">Payout</th>}
                 {staff && <th className="text-right">Profit</th>}
               </tr>
             </thead>
@@ -183,7 +183,7 @@ function CallsContent() {
                       {c.target && <div className="truncate text-xs text-faint">{c.buyer ? c.target.name : 'Direct target'}</div>}
                     </td>
                   )}
-                  {user?.role !== 'BUYER' && <td className="max-w-[150px] truncate whitespace-nowrap">{c.publisher?.name ?? <span className="text-faint">—</span>}</td>}
+                  {user?.role !== 'BUYER' && user?.role !== 'AGENT' && <td className="max-w-[150px] truncate whitespace-nowrap">{c.publisher?.name ?? <span className="text-faint">—</span>}</td>}
                   <td className="whitespace-nowrap">
                     <span className="inline-flex flex-wrap items-center gap-1">
                       {c.converted ? (
@@ -196,8 +196,8 @@ function CallsContent() {
                     {c.rejectReason && !c.converted && <div className="mt-0.5 text-xs text-faint">{REASONS[c.rejectReason] ?? c.rejectReason}</div>}
                   </td>
                   <td className="text-right font-mono tabular">{duration(c.connectedSec)}</td>
-                  {user?.role !== 'PUBLISHER' && <td className="text-right font-mono tabular">{money(c.revenue ?? 0)}</td>}
-                  {user?.role !== 'BUYER' && <td className="text-right font-mono tabular">{money(c.payout ?? 0)}</td>}
+                  {user?.role !== 'PUBLISHER' && user?.role !== 'AGENT' && <td className="text-right font-mono tabular">{money(c.revenue ?? 0)}</td>}
+                  {user?.role !== 'BUYER' && user?.role !== 'AGENT' && <td className="text-right font-mono tabular">{money(c.payout ?? 0)}</td>}
                   {staff && <td className={`text-right font-mono font-medium tabular ${Number(c.profit) < 0 ? 'text-danger' : ''}`}>{money(c.profit ?? 0)}</td>}
                 </tr>
               ))}
@@ -221,7 +221,7 @@ function CallsContent() {
 
 export default function CallsPage() {
   return (
-    <AppShell allow={['TENANT_ADMIN', 'MANAGER', 'PUBLISHER', 'BUYER']}>
+    <AppShell allow={['TENANT_ADMIN', 'MANAGER', 'PUBLISHER', 'BUYER', 'AGENT']}>
       <CallsContent />
     </AppShell>
   );
