@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowDown, ArrowUp, Ban, Building2, CircleDollarSign, Crown, Download, ExternalLink, FlaskConical, Landmark, LogIn, MoreHorizontal, PlayCircle,
   Plus, Search, TrendingUp, Wallet,
@@ -110,7 +110,28 @@ function AdminContent() {
   const [flag, setFlag] = useState<'' | 'lowWallet' | 'inactive' | 'domain'>('');
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'created', dir: -1 });
   const [modal, setModal] = useState<{ kind: 'new' } | { kind: 'credit' | 'suspend'; c: CustomerRow } | null>(null);
-  const [menu, setMenu] = useState<string | null>(null);
+  // Row menu floats over the page (fixed), so the table's scroll box can't clip it.
+  const [menu, setMenu] = useState<{ id: string; top: number; right: number } | null>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [menu]);
+  const openMenu = (id: string, el: HTMLElement) => {
+    if (menu?.id === id) return setMenu(null);
+    const r = el.getBoundingClientRect();
+    const MENU_H = 100;
+    const top = r.bottom + 4 + MENU_H > window.innerHeight ? r.top - 4 - MENU_H : r.bottom + 4;
+    setMenu({ id, top, right: window.innerWidth - r.right });
+  };
   const [now] = useState(() => Date.now());
 
   const rows = useMemo(() => {
@@ -271,14 +292,16 @@ function AdminContent() {
                     <button
                       type="button"
                       aria-label={`More actions for ${c.name}`}
-                      aria-expanded={menu === c.id}
-                      onClick={() => setMenu(menu === c.id ? null : c.id)}
+                      aria-expanded={menu?.id === c.id}
+                      onClick={(e) => openMenu(c.id, e.currentTarget)}
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted hover:bg-subtle hover:text-foreground"
                     >
                       <MoreHorizontal size={16} aria-hidden />
                     </button>
-                    {menu === c.id && (
-                      <div className="absolute right-4 top-11 z-20 w-48 rounded-xl border border-border bg-card p-1 text-left shadow-xl" onMouseLeave={() => setMenu(null)}>
+                    {menu?.id === c.id && (
+                      <>
+                      <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} aria-hidden />
+                      <div role="menu" style={{ top: menu.top, right: menu.right }} className="fixed z-50 w-48 rounded-xl border border-border bg-card p-1 text-left shadow-xl">
                         <button type="button" onClick={() => { setMenu(null); setModal({ kind: 'credit', c }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-[13px] hover:bg-subtle">
                           <Wallet size={14} aria-hidden /> Adjust wallet
                         </button>
@@ -296,6 +319,7 @@ function AdminContent() {
                           </button>
                         )}
                       </div>
+                      </>
                     )}
                   </td>
                 </tr>
