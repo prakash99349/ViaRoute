@@ -75,7 +75,7 @@ export class TenantController {
   async tlsCheck(@Query('domain') domain = '') {
     const d = domain.toLowerCase();
     const root = config.rootDomain;
-    if (d === root || d === `app.${root}` || d === `api.${root}` || d === `www.${root}`) return { ok: true };
+    if (d === config.mainHost || d === root || d === `app.${root}` || d === `api.${root}` || d === `www.${root}`) return { ok: true };
     if (d.endsWith(`.${root}`)) {
       const sub = d.slice(0, -(root.length + 1));
       if (!RESERVED_SUBDOMAINS.has(sub) && (await prisma.tenant.findUnique({ where: { subdomain: sub } }))) return { ok: true };

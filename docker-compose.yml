@@ -7,6 +7,7 @@
 #   APP_DOMAIN=royal-dream.1wp.site     the domain the platform gives the app (no https://)
 #   ADMIN_EMAIL=you@example.com         first Super Admin, created on start-up
 #   ADMIN_PASSWORD=a-long-password      12+ characters; also the test inbox password (user "admin")
+# Optional: PORTAL_DOMAIN=psoni.in puts customer portals at <name>.psoni.in instead of <name>.APP_DOMAIN.
 # JWT_SECRET and ENCRYPTION_KEY are generated on first start and kept in the "secrets" volume.
 # The database is only reachable inside this stack; set POSTGRES_PASSWORD before the first start to choose its password.
 #
@@ -34,7 +35,7 @@ services:
       args:
         # The browser calls the API on the same address (…/api), so any portal host works.
         NEXT_PUBLIC_API_URL: /api
-        NEXT_PUBLIC_ROOT_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN is not set. On xCloud turn on Environment File and add APP_DOMAIN, ADMIN_EMAIL and ADMIN_PASSWORD}
+        NEXT_PUBLIC_ROOT_DOMAIN: ${PORTAL_DOMAIN:-${APP_DOMAIN:?APP_DOMAIN is not set. On xCloud turn on Environment File and add APP_DOMAIN, ADMIN_EMAIL and ADMIN_PASSWORD}}
     restart: unless-stopped
 
   api:
@@ -51,6 +52,8 @@ services:
       REDIS_URL: redis://redis:6379
       # Main-site address; the web and API addresses are worked out from it.
       APP_DOMAIN: ${APP_DOMAIN}
+      # Optional: customer portals as <name>.PORTAL_DOMAIN (e.g. main viaroute.psoni.in, portals acme.psoni.in).
+      PORTAL_DOMAIN: ${PORTAL_DOMAIN:-}
       # One domain only: any address that isn't a customer portal opens the main site.
       UNKNOWN_HOST_IS_MAIN_SITE: "true"
       # Empty = generated once and kept in the secrets volume.

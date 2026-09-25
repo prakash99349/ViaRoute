@@ -25,6 +25,6 @@ async function bootstrap() {
   }
 
   await app.listen(config.port);
-  Logger.log(`🚀 API ready on http://localhost:${config.port} — main site: ${config.rootDomain}`, 'Bootstrap');
+  Logger.log(`🚀 API ready on http://localhost:${config.port} — main site: ${config.mainHost}, portals: *.${config.rootDomain}`, 'Bootstrap');
 }
 bootstrap();

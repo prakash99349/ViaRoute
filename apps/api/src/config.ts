@@ -34,7 +34,9 @@ export function cleanDomain(v: string | undefined): string {
 
 /** One-port platforms (xCloud, Coolify) set APP_DOMAIN; the other addresses follow from it. */
 const appDomain = cleanDomain(process.env.APP_DOMAIN);
-const rootDomain = appDomain || cleanDomain(process.env.ROOT_DOMAIN) || 'localhost';
+/** Optional: customer portals under another domain than the main site (main viaroute.psoni.in, portals acme.psoni.in). */
+const portalDomain = cleanDomain(process.env.PORTAL_DOMAIN);
+const rootDomain = portalDomain || appDomain || cleanDomain(process.env.ROOT_DOMAIN) || 'localhost';
 
 function required(name: string): string {
   const v = process.env[name] || generatedSecret(name);
@@ -46,7 +48,10 @@ export const config = {
   port: Number(process.env.API_PORT ?? 4000),
   jwtSecret: required('JWT_SECRET'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '7d',
+  /** Customer portals are <subdomain>.rootDomain. */
   rootDomain,
+  /** Host of the main site (sign-up, Super Admin); the same as rootDomain unless PORTAL_DOMAIN is set. */
+  mainHost: appDomain || rootDomain,
   webOrigin: appDomain ? `https://${appDomain}` : (process.env.WEB_ORIGIN ?? 'http://localhost:3000'),
   /** Public URL of this API (for carrier webhook URLs), e.g. https://api.yourdomain.com */
   apiOrigin: (appDomain ? `https://${appDomain}/api` : process.env.API_ORIGIN ?? `http://localhost:${process.env.API_PORT ?? 4000}`).replace(/\/$/, ''),
@@ -79,6 +84,8 @@ export const config = {
 export const RESERVED_SUBDOMAINS = new Set([
   'www', 'app', 'api', 'admin', 'staging', 'status', 'mail', 'docs', 'help', 'support', 'billing', 'static', 'cdn',
 ]);
+// The main site itself can live under the portal domain (viaroute.psoni.in) — nobody may claim that name.
+if (config.mainHost.endsWith(`.${config.rootDomain}`)) RESERVED_SUBDOMAINS.add(config.mainHost.slice(0, -(config.rootDomain.length + 1)));
 
 /** Usage price per minute when neither the plan nor the customer sets one. */
 export const DEFAULT_PER_MINUTE = 0.025;
@@ -91,5 +98,6 @@ export function portalOrigin(
   if (!tenant) return web.origin;
   // Custom domains always use HTTPS (Caddy issues the certificate).
   if (tenant.customDomain && tenant.customDomainVerifiedAt) return `https://${tenant.customDomain}`;
-  return `${web.protocol}//${tenant.subdomain}.${web.host}`;
+  const base = portalDomain ? config.rootDomain : web.host;
+  return `${web.protocol}//${tenant.subdomain}.${base}`;
 }

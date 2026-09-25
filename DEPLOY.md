@@ -50,6 +50,10 @@ ADMIN_PASSWORD=a-long-password
 | `ADMIN_EMAIL` | your Super Admin login, created on first start |
 | `ADMIN_PASSWORD` | 12+ characters; also the test inbox password at `/mail/` (user `admin`) |
 
+Customer portals under another domain than the admin site: add `PORTAL_DOMAIN`. Example — admin at
+`viaroute.psoni.in`, customers at `acme.psoni.in`: `APP_DOMAIN=viaroute.psoni.in` and `PORTAL_DOMAIN=psoni.in`
+(DNS: `viaroute` and `*` → server; the server's web proxy must send both to port 8080).
+
 `JWT_SECRET` and `ENCRYPTION_KEY` are generated on the first start and kept in the `secrets` volume (set them yourself to override).
 The database is only reachable inside the stack; to choose its password, set `POSTGRES_PASSWORD` before the first deploy.
 Optional: `SMTP_URL` / `MAIL_FROM` for real email, `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`.

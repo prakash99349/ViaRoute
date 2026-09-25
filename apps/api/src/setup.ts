@@ -16,6 +16,7 @@ async function allowedOrigin(origin: string): Promise<boolean> {
     return false;
   }
   if (url.protocol === web.protocol && (url.hostname === web.hostname || url.hostname.endsWith(`.${web.hostname}`))) return true;
+  if (url.protocol === web.protocol && url.hostname.endsWith(`.${config.rootDomain}`)) return true;
   if (url.protocol !== 'https:') return false;
 
   const cached = customDomainCache.get(url.hostname);
