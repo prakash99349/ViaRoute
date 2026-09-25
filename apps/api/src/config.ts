@@ -1,10 +1,34 @@
 import { config as loadEnv } from 'dotenv';
-import { resolve } from 'path';
+import { randomBytes } from 'crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { join, resolve } from 'path';
 
 loadEnv({ path: resolve(__dirname, '../../../.env'), quiet: true });
 
+const GENERATED: Record<string, () => string> = {
+  JWT_SECRET: () => randomBytes(48).toString('hex'),
+  ENCRYPTION_KEY: () => randomBytes(32).toString('hex'),
+};
+
+/**
+ * With SECRETS_DIR set (one-port Docker setup), secrets missing from the environment are generated
+ * once and kept in that folder (a Docker volume), so the app starts with no configuration.
+ */
+function generatedSecret(name: string): string | undefined {
+  const dir = process.env.SECRETS_DIR;
+  if (!dir || !GENERATED[name]) return undefined;
+  const file = join(dir, 'secrets.json');
+  const saved: Record<string, string> = existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {};
+  if (!saved[name]) {
+    saved[name] = GENERATED[name]();
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(file, JSON.stringify(saved, null, 2), { mode: 0o600 });
+  }
+  return saved[name];
+}
+
 function required(name: string): string {
-  const v = process.env[name];
+  const v = process.env[name] || generatedSecret(name);
   if (!v) throw new Error(`Missing required env var ${name}`);
   return v;
 }

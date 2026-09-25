@@ -29,7 +29,7 @@ RUN apk add --no-cache openssl tini && addgroup -S app && adduser -S app -G app
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build --chown=app:app /out ./
-RUN mkdir -p /app/storage && chown app:app /app/storage
+RUN mkdir -p /app/storage /app/secrets && chown app:app /app/storage /app/secrets
 ENV STORAGE_DIR=/app/storage
 USER app
 EXPOSE 4000

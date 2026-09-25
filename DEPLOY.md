@@ -36,18 +36,22 @@ The root `docker-compose.yml` runs everything behind one port (**8080**): web ap
 | Docker Compose file | `docker-compose.yml` |
 | Port | `8080` |
 
-Environment variables:
+Environment variables: turn on **Environment File** and paste these three lines (without it, the deploy fails with `required variable … is missing a value`):
+
+```
+APP_DOMAIN=royal-dream.1wp.site
+ADMIN_EMAIL=you@example.com
+ADMIN_PASSWORD=a-long-password
+```
 
 | Name | Value |
 |---|---|
-| `APP_DOMAIN` | the domain xCloud gives the app, e.g. `mirthful-hill.1wp.site` (no `https://`) |
-| `ADMIN_EMAIL` | your admin login |
-| `ADMIN_PASSWORD` | 12+ characters (change it after the first login) |
-| `POSTGRES_PASSWORD` | `openssl rand -hex 32` |
-| `JWT_SECRET` | `openssl rand -hex 48` |
-| `ENCRYPTION_KEY` | `openssl rand -hex 32` (exactly 64 characters) |
-| `MAIL_UI_PASSWORD` | password for the test inbox at `/mail/` (user `admin`) |
+| `APP_DOMAIN` | the domain the platform gives the app (no `https://`) |
+| `ADMIN_EMAIL` | your Super Admin login, created on first start |
+| `ADMIN_PASSWORD` | 12+ characters; also the test inbox password at `/mail/` (user `admin`) |
 
+`JWT_SECRET` and `ENCRYPTION_KEY` are generated on the first start and kept in the `secrets` volume (set them yourself to override).
+The database is only reachable inside the stack; to choose its password, set `POSTGRES_PASSWORD` before the first deploy.
 Optional: `SMTP_URL` / `MAIL_FROM` for real email, `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET`.
 Carrier webhook URLs (Admin → Carriers) come out as `https://<APP_DOMAIN>/api/webhooks/…`.
 

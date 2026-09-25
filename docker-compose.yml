@@ -3,8 +3,12 @@
 #   https://<APP_DOMAIN>/        web app        https://<APP_DOMAIN>/api/…  API (carrier webhooks too)
 #   https://<APP_DOMAIN>/mail/   test inbox (user "admin", password MAIL_UI_PASSWORD)
 #
-# Set these environment variables on the platform (see the list in DEPLOY.md → "xCloud"):
-#   APP_DOMAIN, ADMIN_EMAIL, ADMIN_PASSWORD, POSTGRES_PASSWORD, JWT_SECRET, ENCRYPTION_KEY, MAIL_UI_PASSWORD
+# Only three settings are needed (on xCloud: turn on "Environment File" and paste them):
+#   APP_DOMAIN=royal-dream.1wp.site     the domain the platform gives the app (no https://)
+#   ADMIN_EMAIL=you@example.com         first Super Admin, created on start-up
+#   ADMIN_PASSWORD=a-long-password      12+ characters; also the test inbox password (user "admin")
+# JWT_SECRET and ENCRYPTION_KEY are generated on first start and kept in the "secrets" volume.
+# The database is only reachable inside this stack; set POSTGRES_PASSWORD before the first start to choose its password.
 #
 # For your own server with automatic HTTPS for every customer subdomain and custom domain, use
 # infra/docker-compose.prod.yml instead.
@@ -30,7 +34,7 @@ services:
       args:
         # The browser calls the API on the same address (…/api), so any portal host works.
         NEXT_PUBLIC_API_URL: /api
-        NEXT_PUBLIC_ROOT_DOMAIN: ${APP_DOMAIN:?set APP_DOMAIN, e.g. mirthful-hill.1wp.site}
+        NEXT_PUBLIC_ROOT_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN is not set. On xCloud turn on Environment File and add APP_DOMAIN, ADMIN_EMAIL and ADMIN_PASSWORD}
     restart: unless-stopped
 
   api:
@@ -43,17 +47,19 @@ services:
       API_PORT: 4000
       # Platform proxy + our gateway.
       TRUST_PROXY_HOPS: 2
-      DATABASE_URL: postgresql://viaroute:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@postgres:5432/viaroute?schema=public
+      DATABASE_URL: postgresql://viaroute:${POSTGRES_PASSWORD:-viaroute-internal-db}@postgres:5432/viaroute?schema=public
       REDIS_URL: redis://redis:6379
       ROOT_DOMAIN: ${APP_DOMAIN}
       WEB_ORIGIN: https://${APP_DOMAIN}
       API_ORIGIN: https://${APP_DOMAIN}/api
       CUSTOM_DOMAIN_TARGET: ${APP_DOMAIN}
-      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+      # Empty = generated once and kept in the secrets volume.
+      JWT_SECRET: ${JWT_SECRET:-}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      SECRETS_DIR: /app/secrets
       # First admin, created on start-up if missing (change the password after logging in).
-      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD (12+ characters)}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       # Email: the built-in test inbox unless you set a real SMTP server (e.g. Resend).
       SMTP_URL: ${SMTP_URL:-smtp://mailpit:1025}
       MAIL_FROM: ${MAIL_FROM:-ViaRoute <no-reply@viaroute.test>}
@@ -66,6 +72,7 @@ services:
       STORAGE_DIR: /app/storage
     volumes:
       - recordings:/app/storage
+      - secrets:/app/secrets
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,7 +84,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: viaroute
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-viaroute-internal-db}
       POSTGRES_DB: viaroute
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -103,9 +110,10 @@ services:
     restart: unless-stopped
     environment:
       MP_WEBROOT: /mail/
-      MP_UI_AUTH: admin:${MAIL_UI_PASSWORD:?set MAIL_UI_PASSWORD}
+      MP_UI_AUTH: admin:${MAIL_UI_PASSWORD:-${ADMIN_PASSWORD:?ADMIN_PASSWORD is not set (it also protects the test inbox)}}
 
 volumes:
   pgdata:
   redisdata:
   recordings:
+  secrets:
