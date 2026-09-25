@@ -13,6 +13,7 @@ import { CurrentUser, Roles } from '../common/decorators';
 import type { AuthUser } from '../common/types';
 import { IsTimeZone, Trim, TrimOrNull } from '../common/validation';
 import { config, DEFAULT_PER_MINUTE, portalOrigin, RESERVED_SUBDOMAINS } from '../config';
+import { defaultPlan } from '../cli/bootstrap-admin';
 import { MailService } from '../mail/mail.service';
 import { numberProviderName, ProvidersService } from '../telephony/providers.service';
 import { NumbersService } from '../numbers/numbers.service';
@@ -234,7 +235,7 @@ export class CustomersController {
     if (await prisma.tenant.findUnique({ where: { subdomain: dto.subdomain } })) throw new ConflictException('That subdomain is already taken');
     const plan = dto.planId
       ? await prisma.plan.findUnique({ where: { id: dto.planId } })
-      : await prisma.plan.findUnique({ where: { code: 'starter' } });
+      : await defaultPlan();
     if (dto.planId && !plan) throw new NotFoundException('Plan not found');
 
     const trialDays = dto.trialDays ?? config.trialDays;

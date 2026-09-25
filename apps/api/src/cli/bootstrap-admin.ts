@@ -1,11 +1,18 @@
 import bcrypt from 'bcryptjs';
 import { prisma, Role } from '@viaroute/db';
 
+/** Pay as you go: no monthly fee — customers pay per call minute and per number. More plans can be added in Admin → Plans. */
 export const DEFAULT_PLANS = [
-  { code: 'starter', name: 'Starter', monthlyPrice: 99, perMinuteRate: 0.025, includedNumbers: 5, maxUsers: 3, whiteLabel: false, customDomain: false },
-  { code: 'pro', name: 'Pro', monthlyPrice: 299, perMinuteRate: 0.02, includedNumbers: 25, maxUsers: 10, whiteLabel: true, customDomain: false },
-  { code: 'enterprise', name: 'Enterprise', monthlyPrice: 0, perMinuteRate: 0.015, includedNumbers: 100, maxUsers: null, whiteLabel: true, customDomain: true },
+  { code: 'payg', name: 'Pay as you go', monthlyPrice: 0, perMinuteRate: 0.025, includedNumbers: 0, maxUsers: null, whiteLabel: true, customDomain: true },
 ];
+
+/** The plan new customers start on: Pay as you go, else the cheapest active plan. */
+export async function defaultPlan() {
+  return (
+    (await prisma.plan.findFirst({ where: { code: 'payg', active: true } })) ??
+    (await prisma.plan.findFirst({ where: { active: true }, orderBy: { monthlyPrice: 'asc' } }))
+  );
+}
 
 /** Creates the default plans (never overwriting edited ones). */
 export async function ensurePlans() {

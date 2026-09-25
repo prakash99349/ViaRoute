@@ -7,6 +7,7 @@ import QRCode from 'qrcode';
 import { decrypt, encrypt } from '../common/crypto';
 import type { AuthUser } from '../common/types';
 import { config, portalOrigin, RESERVED_SUBDOMAINS } from '../config';
+import { defaultPlan } from '../cli/bootstrap-admin';
 import { MailService } from '../mail/mail.service';
 import type { LoginDto, SignupDto } from './dto';
 import { TokensService } from './tokens.service';
@@ -49,7 +50,7 @@ export class AuthService {
       throw new ConflictException('That subdomain is already taken');
     }
 
-    const starter = await prisma.plan.findUnique({ where: { code: 'starter' } });
+    const starter = await defaultPlan();
     const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
 
     const { tenant, user } = await prisma.$transaction(async (tx) => {

@@ -133,11 +133,11 @@ function PlanCard({ overview, onChanged }: { overview: Overview; onChanged: (msg
                 {current && <Badge tone="green">Current</Badge>}
               </div>
               <div className="mt-2 text-2xl font-semibold">
-                {Number(p.monthlyPrice) ? money(p.monthlyPrice) : 'Custom'}
+                {Number(p.monthlyPrice) ? money(p.monthlyPrice) : 'No monthly fee'}
                 {Number(p.monthlyPrice) > 0 && <span className="text-sm font-normal text-muted">/mo</span>}
               </div>
               <ul className="mt-3 flex-1 space-y-1 text-sm text-muted">
-                <li className="flex items-center gap-2"><Check size={14} className="text-success" aria-hidden />{p.includedNumbers} numbers included</li>
+                {p.includedNumbers > 0 && <li className="flex items-center gap-2"><Check size={14} className="text-success" aria-hidden />{p.includedNumbers} numbers included</li>}
                 <li className="flex items-center gap-2"><Check size={14} className="text-success" aria-hidden />{(Number(p.perMinuteRate) * 100).toFixed(1)}¢ per call minute</li>
                 <li className="flex items-center gap-2"><Check size={14} className="text-success" aria-hidden />{p.maxUsers === null ? 'Unlimited' : p.maxUsers} team members</li>
                 <li className={`flex items-center gap-2 ${p.whiteLabel ? '' : 'text-faint'}`}>{p.whiteLabel ? <Check size={14} className="text-success" aria-hidden /> : <Minus size={14} aria-hidden />}Your branding</li>

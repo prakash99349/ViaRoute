@@ -19,7 +19,7 @@ async function main() {
   await ensurePlans();
   const result = await ensureSuperAdmin(email, password, true);
   console.log(result === 'reset' ? `✅ Password reset for Super Admin ${email}` : `✅ Super Admin ${email} created`);
-  console.log('✅ Plans ready: starter, pro, enterprise');
+  console.log('✅ Plans ready: pay as you go');
 }
 
 main()

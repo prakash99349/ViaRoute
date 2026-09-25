@@ -194,7 +194,7 @@ export function NewCustomerForm({ onDone }: { onDone: (id?: string) => void }) {
         <Field label="Owner name" name="ownerName" required minLength={2} />
         <Field label="Owner email" name="ownerEmail" type="email" required hint="They get an email to set their password." />
         <Select label="Plan" name="planId" defaultValue="">
-          <option value="">Starter (default)</option>
+          <option value="">Pay as you go (default)</option>
           {plans?.filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>{p.name} — {money(p.monthlyPrice)}/mo</option>)}
         </Select>
         <TimeZoneSelect label="Timezone" name="timezone" defaultValue={browserTimeZone()} />

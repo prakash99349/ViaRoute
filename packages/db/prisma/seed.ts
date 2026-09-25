@@ -8,14 +8,12 @@ const DEMO_PASSWORD = process.env.SEED_PASSWORD ?? 'ViaRoute123!';
 
 async function main() {
   const plans = [
-    { code: 'starter', name: 'Starter', monthlyPrice: 99, perMinuteRate: 0.025, includedNumbers: 5, maxUsers: 3, whiteLabel: false, customDomain: false },
-    { code: 'pro', name: 'Pro', monthlyPrice: 299, perMinuteRate: 0.02, includedNumbers: 25, maxUsers: 10, whiteLabel: true, customDomain: false },
-    { code: 'enterprise', name: 'Enterprise', monthlyPrice: 0, perMinuteRate: 0.015, includedNumbers: 100, maxUsers: null, whiteLabel: true, customDomain: true },
+    { code: 'payg', name: 'Pay as you go', monthlyPrice: 0, perMinuteRate: 0.025, includedNumbers: 0, maxUsers: null, whiteLabel: true, customDomain: true },
   ];
   for (const p of plans) {
     await prisma.plan.upsert({ where: { code: p.code }, update: p, create: p });
   }
-  const pro = await prisma.plan.findUniqueOrThrow({ where: { code: 'pro' } });
+  const payg = await prisma.plan.findUniqueOrThrow({ where: { code: 'payg' } });
 
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
 
@@ -34,7 +32,7 @@ async function main() {
       name: 'Acme Leads',
       subdomain: 'acme',
       status: TenantStatus.ACTIVE,
-      planId: pro.id,
+      planId: payg.id,
       walletBalance: 50,
       billingRenewsAt: new Date(Date.now() + 30 * 86400_000),
       branding: { portalName: 'Acme Call Portal' },
