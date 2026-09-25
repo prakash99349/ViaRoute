@@ -32,7 +32,7 @@ These came out of going through the code, not just the feature list.
 | G2 ✅ | **Carrier config lives in `.env`** (one Telnyx account for everyone) | Can't switch carriers, add a backup, or change keys without a redeploy | Provider management (Phase B) |
 | G3 ✅ | **No carrier cost tracking** — we charge customers per minute but never record what the carrier charged us | Can't see platform margin; can't spot loss-making customers | Store carrier cost per call leg + per number; margin reports |
 | G4 | **Wallet can go below zero mid-call** (checked only when the call starts) | Long calls on a near-empty wallet = unpaid usage | Max call length from balance; hang up with a message when the money runs out |
-| G5 | **Recording notice is the same everywhere** | Two-party-consent states (CA, FL, PA…) need clear consent | Per-campaign notice text; option to require consent |
+| G5 ✅ | **Recording notice is the same everywhere** | Two-party-consent states (CA, FL, PA…) need clear consent | Per-campaign notice text; option to require consent |
 | G6 | **Audit log is written but never shown** (✅ per customer in admin; ⬜ platform-wide + customer-side viewer) | Support and disputes need "who changed what" | Audit log viewer (admin + customer admin) |
 
 ### 🟡 Should fix soon
@@ -207,6 +207,10 @@ These came out of going through the code, not just the feature list.
 ## 🎧 VoIP: agents & softphone ✅ Done
 
 > In-house **agents** (new Agent login role: softphone + own calls only) are targets on campaigns and ring only while **Available**. Browser **softphone** with ring/answer/decline/mute/hang up, caller + campaign + IVR info; audio via Telnyx WebRTC and Twilio Voice SDKs; full flow without audio on the Test carrier. **SIP phones** (Zoiper, desk phones) on Telnyx via per-agent SIP logins. Not possible here: hosting our own SIP trunk (needs a media server).
+
+## 🎙️ Call recording upgrades ✅ Done
+
+> Recordings library (filters, player, download with file names, storage used), per-campaign notice (custom text or no notice where one-party consent applies), per-account retention with automatic deletion (30 days → forever), delete on request (admins, logged), recordings for buyers and agents on their own calls, download from call details.
 
 ## 🅵 Phase F — Growth features (v2)
 

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, NotFoundException, Patch, Query } from '@nestjs/common';
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 import { prisma, Role, tenantDb, type Tenant } from '@viaroute/db';
 import { CurrentTenant, CurrentUser, Public, Roles } from '../common/decorators';
 import type { AuthUser } from '../common/types';
@@ -12,6 +12,10 @@ class SettingsDto {
 
   @IsOptional() @IsTimeZone()
   timezone?: string;
+
+  /** Delete recordings after this many days; null = keep forever. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsInt() @Min(1) @Max(3650)
+  recordingRetentionDays?: number | null;
 }
 
 @Controller()
@@ -43,6 +47,7 @@ export class TenantController {
       status: tenant.status,
       suspendReason: tenant.suspendReason,
       timezone: tenant.timezone,
+      recordingRetentionDays: tenant.recordingRetentionDays,
       walletBalance: tenant.walletBalance,
       branding: tenant.branding,
       customDomain: tenant.customDomain,

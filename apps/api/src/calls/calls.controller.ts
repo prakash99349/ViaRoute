@@ -326,6 +326,8 @@ export class CallsController {
       ...present(c, user),
       hangupCause: c.hangupCause,
       recordingLink: c.recordingUrl ? this.storage.signedPath(c.recordingUrl) : null,
+      recordingDownload: c.recordingUrl ? this.storage.signedPath(c.recordingUrl, 15 * 60, `call-${c.startedAt.toISOString().slice(0, 10)}-${c.callerNumber.replace(/[^\d+]/g, '')}.${c.recordingUrl.endsWith('.wav') ? 'wav' : 'mp3'}`) : null,
+      recordingDeletedAt: c.recordingDeletedAt,
       postbacks: STAFF.includes(user.role) || user.role === Role.PUBLISHER ? c.postbacks : [],
     };
   }

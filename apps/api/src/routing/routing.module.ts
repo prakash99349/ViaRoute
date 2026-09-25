@@ -8,6 +8,7 @@ import { CallEngine } from './call-engine.service';
 import { SettingsService } from '../common/settings.service';
 import { CapsService } from './caps.service';
 import { AgentsController, AgentMeController } from './agents.controller';
+import { RecordingsService } from './recordings.service';
 import { AgentsService } from './agents.service';
 import { SpamController } from './spam.controller';
 import { SpamService } from './spam.service';
@@ -26,11 +27,12 @@ class FilesController {
 
   @Public()
   @Get('*path')
-  serve(@Param('path') path: string | string[], @Query('exp') exp: string, @Query('sig') sig: string, @Res() res: Response) {
+  serve(@Param('path') path: string | string[], @Query('exp') exp: string, @Query('sig') sig: string, @Query('dl') dl: string | undefined, @Res() res: Response) {
     const key = Array.isArray(path) ? path.join('/') : path;
     if (!this.storage.verify(key, Number(exp), sig) || !this.storage.exists(key)) throw new ForbiddenException('Link expired');
     res.setHeader('Content-Type', key.endsWith('.wav') ? 'audio/wav' : 'audio/mpeg');
     res.setHeader('Cache-Control', 'private, max-age=600');
+    if (dl) res.setHeader('Content-Disposition', `attachment; filename="${dl.replace(/[^A-Za-z0-9._+-]/g, '_').slice(0, 100)}"`);
     // Portals (other origins) play these in <audio>; the signed link is the access check.
     res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     this.storage.read(key).pipe(res);
@@ -47,6 +49,7 @@ class FilesController {
     SettingsService,
     SpamService,
     AgentsService,
+    RecordingsService,
     SimulatorCallControl,
     CallEngine,
     {
@@ -56,6 +59,6 @@ class FilesController {
       useFactory: (simulator: SimulatorCallControl): Pick<CallControls, 'simulator'> => ({ simulator }),
     },
   ],
-  exports: [StorageService, CapsService, PostbackService, CallEngine, SimulatorCallControl, SettingsService, SpamService, AgentsService],
+  exports: [StorageService, CapsService, PostbackService, CallEngine, SimulatorCallControl, SettingsService, SpamService, AgentsService, RecordingsService],
 })
 export class RoutingModule {}

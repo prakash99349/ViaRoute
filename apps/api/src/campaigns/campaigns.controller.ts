@@ -30,6 +30,13 @@ class CampaignDto {
   @IsOptional() @IsBoolean()
   recordCalls?: boolean;
 
+  @IsOptional() @IsBoolean()
+  playRecordingNotice?: boolean;
+
+  /** Custom notice; null = the standard one. */
+  @IsOptional() @TrimOrNull() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(300)
+  recordingNotice?: string | null;
+
   @IsOptional() @IsInt() @Min(0) @Max(60 * 60 * 24 * 90)
   duplicateWindowSec?: number;
 

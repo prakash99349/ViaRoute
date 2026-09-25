@@ -76,6 +76,8 @@ interface Campaign {
   payout: string;
   revenue: string;
   recordCalls: boolean;
+  playRecordingNotice: boolean;
+  recordingNotice: string | null;
   duplicateWindowSec: number;
   fallbackNumber: string | null;
   repeatRouting: 'DIFFERENT' | 'SAME' | 'NORMAL';
@@ -196,6 +198,7 @@ function SpamCard({ c, onSaved }: { c: Campaign; onSaved: () => void }) {
 function SettingsCard({ c, onSaved }: { c: Campaign; onSaved: () => void }) {
   const [active, setActive] = useState(c.active);
   const [record, setRecord] = useState(c.recordCalls);
+  const [sayNotice, setSayNotice] = useState(c.playRecordingNotice);
   const { busy, error, notice, run } = useAction();
 
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -214,6 +217,8 @@ function SettingsCard({ c, onSaved }: { c: Campaign; onSaved: () => void }) {
             fallbackNumber: f.get('fallbackNumber'),
             repeatRouting: f.get('repeatRouting'),
             recordCalls: record,
+            playRecordingNotice: sayNotice,
+            ...(record && sayNotice ? { recordingNotice: String(f.get('recordingNotice') ?? '').trim() || null } : {}),
             active,
           },
         }),
@@ -245,8 +250,28 @@ function SettingsCard({ c, onSaved }: { c: Campaign; onSaved: () => void }) {
         <Field label="Fallback number (optional)" name="fallbackNumber" defaultValue={c.fallbackNumber ?? ''} placeholder="+14155550123" hint="Gets calls no buyer can take (unpaid)." />
         <div className="grid gap-3 sm:grid-cols-2">
           <Toggle label="Campaign active" checked={active} onChange={setActive} hint="Paused campaigns reject calls." />
-          <Toggle label="Record calls" checked={record} onChange={setRecord} hint="Plays “This call may be recorded” first." />
+          <Toggle label="Record calls" checked={record} onChange={setRecord} hint="Both sides, from when the buyer answers. Listen in Recordings." />
         </div>
+        {record && (
+          <div className="space-y-3 rounded-xl border border-border p-4">
+            <Toggle
+              label="Say a recording notice first"
+              checked={sayNotice}
+              onChange={setSayNotice}
+              hint={sayNotice ? undefined : 'Off: calls are recorded without telling the caller. Only allowed where one-party consent applies — not in CA, FL, IL, PA, WA and other all-party states.'}
+            />
+            {sayNotice && (
+              <Field
+                label="Notice"
+                name="recordingNotice"
+                defaultValue={c.recordingNotice ?? ''}
+                maxLength={300}
+                placeholder="This call may be recorded for quality assurance."
+                hint="Leave empty for the standard notice."
+              />
+            )}
+          </div>
+        )}
         <Button type="submit" disabled={busy}>{busy ? 'Saving…' : 'Save settings'}</Button>
       </form>
     </Card>
@@ -781,7 +806,7 @@ function CampaignContent() {
       <IvrBuilder campaignId={c.id} initial={c.ivr} whisper={c.whisperText} routes={c.routes} onSaved={reload} />
       <NumbersCard c={c} onChanged={reload} />
       <SpamCard c={c} onSaved={reload} />
-      <SettingsCard key={JSON.stringify([c.name, c.active, c.recordCalls])} c={c} onSaved={reload} />
+      <SettingsCard key={JSON.stringify([c.name, c.active, c.recordCalls, c.playRecordingNotice])} c={c} onSaved={reload} />
     </div>
   );
 }

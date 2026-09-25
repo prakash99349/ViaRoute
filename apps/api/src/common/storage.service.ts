@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { createReadStream, existsSync } from 'fs';
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, rm, stat, writeFile } from 'fs/promises';
 import { dirname, join, normalize, resolve } from 'path';
 import type { Readable } from 'stream';
 import { config } from '../config';
@@ -20,6 +20,18 @@ export class StorageService {
     await mkdir(dirname(path), { recursive: true });
     await writeFile(path, data);
     return key;
+  }
+
+  async size(key: string): Promise<number | null> {
+    try {
+      return (await stat(this.pathFor(key))).size;
+    } catch {
+      return null;
+    }
+  }
+
+  async remove(key: string) {
+    await rm(this.pathFor(key), { force: true });
   }
 
   exists(key: string) {
@@ -42,10 +54,10 @@ export class StorageService {
     }
   }
 
-  /** A link that works without a login for a short time (for <audio> players). */
-  signedPath(key: string, ttlSec = 15 * 60) {
+  /** A link that works without a login for a short time (for <audio> players). With `download`, it saves as that file name. */
+  signedPath(key: string, ttlSec = 15 * 60, download?: string) {
     const exp = Math.floor(Date.now() / 1000) + ttlSec;
-    return `/files/${encodeURI(key)}?exp=${exp}&sig=${sign(key, exp)}`;
+    return `/files/${encodeURI(key)}?exp=${exp}&sig=${sign(key, exp)}${download ? `&dl=${encodeURIComponent(download)}` : ''}`;
   }
 
   verify(key: string, exp: number, sig: string) {

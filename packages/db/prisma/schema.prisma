@@ -66,6 +66,9 @@ model Tenant {
   maxConcurrentCalls Int?
   maxNumbers         Int?
 
+  /** Recordings older than this are deleted automatically (null = keep forever). */
+  recordingRetentionDays Int? @default(90)
+
   /** Carrier for this customer's new numbers (null = the platform default). */
   providerId String?   @db.Uuid
   provider   Provider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
@@ -183,6 +186,8 @@ model Campaign {
   payout              Decimal  @default(0) @db.Decimal(10, 2) // paid to publisher
   revenue             Decimal  @default(0) @db.Decimal(10, 2) // charged to buyer
   recordCalls         Boolean  @default(true)
+  playRecordingNotice Boolean  @default(true)  // say the notice before recording (required in two-party-consent states)
+  recordingNotice     String?  // custom notice; null = "This call may be recorded for quality assurance."
   duplicateWindowSec  Int      @default(86400) // repeat callers inside this window are not paid
   fallbackNumber      String?  // used when no buyer can take the call
   repeatRouting       RepeatRouting @default(DIFFERENT) // where repeat callers are sent
@@ -422,6 +427,8 @@ model Call {
   cost           Decimal      @default(0) @db.Decimal(10, 4) // usage charged to the tenant
   hangupCause    String?
   recordingUrl   String?
+  recordingSize  Int?         // bytes
+  recordingDeletedAt DateTime? // removed by retention or on request
   startedAt      DateTime     @default(now())
   answeredAt     DateTime?    // buyer picked up
   endedAt        DateTime?

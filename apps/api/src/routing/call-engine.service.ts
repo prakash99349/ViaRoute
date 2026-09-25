@@ -73,6 +73,8 @@ interface CallState {
   inboundId: string;
   trackingNumber: string;
   recordCalls: boolean;
+  /** Spoken before recording; null = record without a notice. */
+  recordingNotice?: string | null;
   startedAt: string;
   candidates: Candidate[];
   /** Buyers/targets that already talked to this caller in the duplicate window, newest first. */
@@ -276,6 +278,7 @@ export class CallEngine {
       inboundId: ev.callControlId,
       trackingNumber: ev.to,
       recordCalls: campaign!.recordCalls,
+      recordingNotice: campaign!.recordCalls && campaign!.playRecordingNotice ? campaign!.recordingNotice?.trim() || RECORDING_NOTICE : null,
       startedAt: ev.at.toISOString(),
       candidates,
       seen,
@@ -294,8 +297,8 @@ export class CallEngine {
 
     await this.withLock(call.id, async () => {
       await cc.answer(ev.callControlId);
-      if (state.recordCalls) {
-        await cc.speak(ev.callControlId, RECORDING_NOTICE); // dial when it finishes
+      if (state.recordingNotice) {
+        await cc.speak(ev.callControlId, state.recordingNotice); // dial when it finishes
         await this.save(state);
       } else {
         await this.afterGreeting(state);
@@ -491,7 +494,7 @@ export class CallEngine {
     const ext = ev.contentType.includes('wav') ? 'wav' : 'mp3';
     const key = `recordings/${call.tenantId}/${callId}.${ext}`;
     const saved = ev.audio ? await this.storage.put(key, ev.audio) : ev.url ? await this.storage.putFromUrl(key, ev.url, ev.headers) : null;
-    if (saved) await prisma.call.update({ where: { id: callId }, data: { recordingUrl: saved } });
+    if (saved) await prisma.call.update({ where: { id: callId }, data: { recordingUrl: saved, recordingSize: await this.storage.size(saved), recordingDeletedAt: null } });
   }
 
   // ---------------------------------------------------------------------------

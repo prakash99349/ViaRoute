@@ -1,6 +1,6 @@
 'use client';
 
-import { Ban, Mic, Webhook } from 'lucide-react';
+import { Ban, Download, Mic, Webhook } from 'lucide-react';
 import { api, API_BASE, duration, formatPhone, money } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useAction, useApi } from '@/lib/use-api';
@@ -42,6 +42,8 @@ export interface CallRow {
 export interface CallDetail extends CallRow {
   hangupCause: string | null;
   recordingLink: string | null;
+  recordingDownload?: string | null;
+  recordingDeletedAt?: string | null;
   endedAt: string | null;
   postbacks: { id: string; url: string; statusCode: number | null; attempts: number; lastError: string | null; succeededAt: string | null }[];
 }
@@ -127,9 +129,16 @@ export function CallDrawer({ id, onClose, onChanged }: { id: string; onClose: ()
           <div>
             <h3 className="mb-2 flex items-center gap-2 font-semibold"><Mic size={16} strokeWidth={1.75} className="text-faint" aria-hidden />Recording</h3>
             {c.recordingLink ? (
-              <audio controls preload="none" className="w-full" src={`${API_BASE}${c.recordingLink}`} />
+              <div className="space-y-2">
+                <audio controls preload="none" className="w-full" src={`${API_BASE}${c.recordingLink}`} />
+                {c.recordingDownload && (
+                  <a href={`${API_BASE}${c.recordingDownload}`} className="inline-flex items-center gap-1.5 text-[13px] font-medium text-accent">
+                    <Download size={14} aria-hidden /> Download recording
+                  </a>
+                )}
+              </div>
             ) : (
-              <p className="text-muted">No recording for this call.</p>
+              <p className="text-muted">{c.recordingDeletedAt ? `Recording deleted on ${new Date(c.recordingDeletedAt).toLocaleDateString()}.` : 'No recording for this call.'}</p>
             )}
           </div>
 

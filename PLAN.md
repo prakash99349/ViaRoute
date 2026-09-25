@@ -839,6 +839,8 @@ flowchart LR
 
 **Agents & softphone ✅** — Agent login role, agents as campaign targets that ring only while Available, browser softphone (Telnyx WebRTC / Twilio Voice audio; Test carrier without audio), SIP phone logins on Telnyx, Agents page. 162 API tests passing.
 
+**Call recording ✅** — Recordings library with player/download/storage, custom or no recording notice per campaign, retention with auto-delete, delete on request, buyer/agent access to their own recordings. 168 API tests passing.
+
 **Next: see [IMPROVEMENTS.md](IMPROVEMENTS.md)** for the full improvement plan (admin customer management → provider management → hardening).
 
 **Still for later (v2 / pre-launch hardening):** RTB, number pooling (DNI) JS snippet, IVR builder, AI transcription/scoring, Stripe auto-recharge, recordings on Cloudflare R2, Sentry, Postgres Row-Level Security, 2FA backup codes

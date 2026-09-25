@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import {
-  Briefcase, Crown, Headphones, CreditCard, Crosshair, FileSpreadsheet, Hash, LayoutDashboard, LifeBuoy, LogOut, Megaphone, Menu, Network, PauseCircle, Phone, Plus, Radio, Search,
+  Briefcase, Crown, Headphones, Mic, CreditCard, Crosshair, FileSpreadsheet, Hash, LayoutDashboard, LifeBuoy, LogOut, Megaphone, Menu, Network, PauseCircle, Phone, Plus, Radio, Search,
   Settings, ShieldAlert, Tag, Target, Users, Wallet, X, type LucideIcon,
 } from 'lucide-react';
 import { api, money } from '@/lib/api';
@@ -41,6 +41,7 @@ const TENANT_NAV: NavGroup[] = [
       { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { href: '/live', label: 'Live calls', icon: Radio, badge: 'live' },
       { href: '/calls', label: 'Call logs', icon: Phone, agent: true },
+      { href: '/recordings', label: 'Recordings', icon: Mic, roles: ['TENANT_ADMIN', 'MANAGER', 'BUYER'], agent: true },
       { href: '/reports', label: 'Reports', icon: FileSpreadsheet },
     ],
   },
