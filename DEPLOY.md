@@ -26,6 +26,27 @@ flowchart LR
 
 ---
 
+## 0. Quick trial on a server IP (no domain yet)
+
+Try the whole app on a fresh Ubuntu server before setting up a domain and HTTPS.
+[sslip.io](https://sslip.io) makes `anything.<IP>.sslip.io` point at your server, so customer portals on subdomains work.
+
+```bash
+curl -fsSL https://get.docker.com | sh                 # Docker + Compose plugin
+git clone https://github.com/prakash99349/ViaRoute.git /opt/viaroute && cd /opt/viaroute
+cp infra/.env.trial.example .env.trial
+sed -i "s/^SERVER_IP=.*/SERVER_IP=$(curl -s -4 ifconfig.me)/" .env.trial
+sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 32)/" .env.trial
+sed -i "s/^JWT_SECRET=.*/JWT_SECRET=$(openssl rand -hex 48)/" .env.trial
+sed -i "s/^ENCRYPTION_KEY=.*/ENCRYPTION_KEY=$(openssl rand -hex 32)/" .env.trial
+docker compose -f infra/docker-compose.trial.yml --env-file .env.trial up -d --build
+docker compose -f infra/docker-compose.trial.yml --env-file .env.trial exec api node dist/cli/create-admin.js you@example.com 'a-long-password'
+```
+
+Open `http://<IP>.sslip.io:3000` and log in with the email and password above. Customer portals: `http://<name>.<IP>.sslip.io:3000`.
+Emails (verification, invites) land in the test inbox at `http://<IP>:8025`. Open ports 3000, 4000 and 8025 in the firewall.
+Calls use the built-in Test carrier. Stop with `docker compose -f infra/docker-compose.trial.yml --env-file .env.trial down` (add `-v` to delete the data).
+
 ## 1. Accounts & keys (before the server)
 
 - [ ] **Domain** in **Cloudflare** (e.g. `viaroute.com`)

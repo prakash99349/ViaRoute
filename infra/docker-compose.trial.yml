@@ -1,0 +1,97 @@
+# ViaRoute — TRIAL on a server IP (no domain, no HTTPS). For trying it out, not for customers.
+#
+#   cp infra/.env.trial.example .env.trial && nano .env.trial      # set SERVER_IP and the secrets
+#   docker compose -f infra/docker-compose.trial.yml --env-file .env.trial up -d --build
+#
+# Open:  http://<SERVER_IP>.sslip.io:3000        (sslip.io maps every *.IP.sslip.io name to your IP,
+#        http://acme.<SERVER_IP>.sslip.io:3000    so customer portals on subdomains work without a domain)
+#        http://<SERVER_IP>:8025                  test inbox (sign-up / invite emails land here)
+#
+# Ports: 3000 web, 4000 API, 8025 test inbox. Postgres and Redis are not exposed.
+
+name: viaroute-trial
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: viaroute
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: viaroute
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U viaroute"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 20
+
+  # Catches every email (verification, invites, password resets) — read them at :8025.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
+
+  api:
+    build:
+      context: ..
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+      API_PORT: 4000
+      DATABASE_URL: postgresql://viaroute:${POSTGRES_PASSWORD}@postgres:5432/viaroute?schema=public
+      REDIS_URL: redis://redis:6379
+      ROOT_DOMAIN: ${SERVER_IP:?set SERVER_IP in .env.trial}.sslip.io
+      WEB_ORIGIN: http://${SERVER_IP}.sslip.io:3000
+      API_ORIGIN: http://${SERVER_IP}.sslip.io:4000
+      CUSTOM_DOMAIN_TARGET: domains.${SERVER_IP}.sslip.io
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set ENCRYPTION_KEY}
+      SMTP_URL: smtp://mailpit:1025
+      MAIL_FROM: ViaRoute <no-reply@viaroute.test>
+      # Test carrier: simulated numbers and calls (add a real carrier later in Admin → Carriers).
+      TELNYX_API_KEY: ""
+      SIMULATOR_ENABLED: "true"
+      TRIAL_DAYS: 14
+      STORAGE_DIR: /app/storage
+    volumes:
+      - recordings:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Baked into the browser bundle: rebuild (up -d --build) after changing SERVER_IP.
+        NEXT_PUBLIC_API_URL: http://${SERVER_IP}.sslip.io:4000
+        NEXT_PUBLIC_ROOT_DOMAIN: ${SERVER_IP}.sslip.io:3000
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  redisdata:
+  recordings:
